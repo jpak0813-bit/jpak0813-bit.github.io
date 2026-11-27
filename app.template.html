@@ -942,6 +942,12 @@ function roamStep(){
     r.walkingUntil = t + ROAM.walkMs;
     r.nextAt = t + ROAM.minWait + Math.random() * (ROAM.maxWait - ROAM.minWait);
     changed = true;
+    /* 걷기(1.4초)가 끝나는 순간 바로 숨쉬기 자세로 — 0.7초 폴링을 기다리지 않게 */
+    const rid = a.id;
+    setTimeout(() => {
+      const rr = S.roam[rid];
+      if(rr && rr.walkingUntil && now() >= rr.walkingUntil){ rr.walkingUntil = 0; render(); }
+    }, ROAM.walkMs + 40);
   });
   if(changed) render();
 }
