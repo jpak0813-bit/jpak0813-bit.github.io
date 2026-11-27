@@ -25,7 +25,7 @@
   <a href="index.html?auth=off&db=off" target="_blank" style="color:#ffd84d">새 창으로 열기</a>
 </div>
 <div class="stage">
-  <div class="phone"><iframe id="ph" src="../index.html?auth=off&db=off" title="모바일 미리보기"></iframe></div>
+  <div class="phone"><iframe id="ph" title="모바일 미리보기"></iframe></div>
   <div class="note">
     <p>실제 배포본을 <b>390×844</b>(갤럭시/아이폰 세로) 크기로 띄워 보는 확인용 페이지입니다. 주소에 <code>?auth=off&db=off</code>를 붙여 로그인·DB 없이 화면만 봅니다.</p>
     <p>여기서 상태를 바꾼 값은 이 브라우저의 localStorage에만 저장되고 Firebase에는 쓰지 않습니다.</p>
@@ -33,9 +33,11 @@
   </div>
 </div>
 <script>
-  document.getElementById('pick').addEventListener('change', e => {
-    document.getElementById('ph').src = '../index.html' + e.target.value;
-  });
+  const ph = document.getElementById('ph');
+  /* 매번 새로 받도록 캐시 방지 값을 붙입니다(Pages CDN 캐시에 옛 화면이 남지 않게). */
+  const load = q => { ph.src = '../index.html' + (q || '?auth=off&db=off') + '&v=' + Date.now(); };
+  document.getElementById('pick').addEventListener('change', e => load(e.target.value));
+  load('?auth=off&db=off');
 </script>
 </body>
 </html>
