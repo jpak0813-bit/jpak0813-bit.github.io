@@ -1490,39 +1490,44 @@ function renderMap(){
       + '</button>';
   }).join('');
 
-  /* 캐릭터(actor)는 innerHTML 로 매번 새로 만들지 않고 한 번 만든 요소를 재사용합니다.
-     그래야 left/top transition 이 살아 있어 걸어가는 모습이 보입니다. */
-  let layer = el.querySelector('.actor-layer');
-  if(!layer){ layer = document.createElement('div'); layer.className = 'actor-layer'; }
+  /* 지도 뼈대(그림·캐릭터 레이어)는 한 번만 만들고 다시 그리지 않습니다.
+     요소가 문서에서 떼어졌다 붙으면 CSS transition 이 끊겨 걷는 모습이 사라지기 때문입니다. */
+  let wrap = el.querySelector('.mapwrap');
+  if(!wrap){
+    el.innerHTML = ''
+      + '<div class="mapwrap"><img src="' + IMG + '" alt="스마트 오피스 3D 지도"><div class="actor-layer"></div></div>'
+      + '<div class="mapmeta"></div>'
+      + '<div class="card nowcard">'
+      +   '<div class="sec-title">🛰️ 지금 오피스<span class="line"></span></div>'
+      +   '<div class="nowlist"></div>'
+      +   '<div class="maphint">구역을 누르면 인력 이동 · 캐릭터를 누르면 상태 확인 · 이름 변경</div>'
+      + '</div>';
+    wrap = el.querySelector('.mapwrap');
+  }
 
   const working = agents.filter(a => a.status === '작업중').length;
   const openTasks = Object.values(S.tasks).filter(t => t.status !== 'done').length;
 
-  el.innerHTML = ''
-    + '<div class="mapwrap"><img src="' + IMG + '" alt="스마트 오피스 3D 지도">' + zones + '</div>'
-    + '<div class="mapmeta">'
-    +   '<span class="pill">👥 출근 <b>' + agents.length + '명</b></span>'
-    +   '<span class="pill">⚡ 작업중 <b>' + working + '명</b></span>'
-    +   '<span class="pill">📋 남은 일 <b>' + openTasks + '건</b></span>'
-    +   '<span class="pill">💬 무전 <b>' + visibleMessages().length + '건</b></span>'
-    + '</div>'
-    + '<div class="card nowcard">'
-    +   '<div class="sec-title">🛰️ 지금 오피스<span class="line"></span></div>'
-    +   '<div class="nowlist">'
-    +   (agents.length ? agents.map(a =>
-          '<div class="nowrow" data-watch="' + esc(a.id) + '">'
-          + '<div class="nav">' + charSvg(a) + '</div>'
-          + '<div style="flex:1;min-width:0"><div class="nname">' + esc(a.name) + '</div>'
-          + '<div class="nsub">' + esc(a.role || '') + ' · ' + esc(poses[a.id].where) + '</div></div>'
-          + '<span class="statuspill st-' + esc(a.status) + '">' + esc(a.status) + '</span>'
-          + '</div>').join('')
-        : '<div class="empty">아직 출근한 인력이 없습니다. 인력 현황에서 추가하세요.</div>')
-    +   '</div>'
-    +   '<div class="maphint">구역을 누르면 인력 이동 · 캐릭터를 누르면 상태 확인 · 이름 변경</div>'
-    + '</div>';
+  /* 구역 이름표는 매번 새로 그립니다(움직이지 않으므로 상관없음) */
+  wrap.querySelectorAll('.zone').forEach(n => n.remove());
+  wrap.insertAdjacentHTML('beforeend', zones);
 
-  el.querySelector('.mapwrap').appendChild(layer);
-  syncActors(layer, agents, poses);
+  el.querySelector('.mapmeta').innerHTML = ''
+    + '<span class="pill">👥 출근 <b>' + agents.length + '명</b></span>'
+    + '<span class="pill">⚡ 작업중 <b>' + working + '명</b></span>'
+    + '<span class="pill">📋 남은 일 <b>' + openTasks + '건</b></span>'
+    + '<span class="pill">💬 무전 <b>' + visibleMessages().length + '건</b></span>';
+
+  el.querySelector('.nowlist').innerHTML = agents.length ? agents.map(a =>
+      '<div class="nowrow" data-watch="' + esc(a.id) + '">'
+      + '<div class="nav">' + charSvg(a) + '</div>'
+      + '<div style="flex:1;min-width:0"><div class="nname">' + esc(a.name) + '</div>'
+      + '<div class="nsub">' + esc(a.role || '') + ' · ' + esc(poses[a.id].where) + '</div></div>'
+      + '<span class="statuspill st-' + esc(a.status) + '">' + esc(a.status) + '</span>'
+      + '</div>').join('')
+    : '<div class="empty">아직 출근한 인력이 없습니다. 인력 현황에서 추가하세요.</div>';
+
+  syncActors(wrap.querySelector('.actor-layer'), agents, poses);
 }
 
 /* 지도 위 캐릭터 요소를 재사용하면서 상태·자리·이름표만 갱신합니다. */
@@ -1553,7 +1558,7 @@ function syncActors(layer, agents, poses){
     }
     const ch = btn.querySelector('.ch');
     if(ch && ch.classList.contains('face-left') !== !!p.face) ch.classList.toggle('face-left', !!p.face);
-    const cls = 'actor ' + p.state + (p.walking ? ' walking' : '') + (selOn(a.id) ? ' sel' : '');
+    const cls = 'actor ' + p.state + (p.walking && p.state !== 'walking' ? ' walking' : '') + (selOn(a.id) ? ' sel' : '');
     if(btn.className !== cls) btn.className = cls;
     btn.setAttribute('data-state', p.state);
     if(btn.style.left !== p.x + '%') btn.style.left = p.x + '%';
