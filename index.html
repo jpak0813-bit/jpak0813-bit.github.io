@@ -566,7 +566,7 @@ function renderMap(){
     +   '<span class="pill">👷 출근 <b>' + agents.length + '명</b></span>'
     +   '<span class="pill">⚡ 작업중 <b>' + working + '명</b></span>'
     +   '<span class="pill">📋 남은 일 <b>' + openTasks + '건</b></span>'
-    +   '<span class="pill">💬 무전 <b>' + Object.keys(S.messages).length + '건</b></span>'
+    +   '<span class="pill">💬 무전 <b>' + visibleMessages().length + '건</b></span>'
     + '</div>'
     + '<div class="card" style="margin-top:12px">'
     +   '<div class="sec-title">🛠️ 지금 현장<span class="line"></span></div>'
@@ -581,12 +581,15 @@ function renderMap(){
     + '</div>';
 }
 
+/* 실제 무전이 오가면 로컬 기본 환영문은 숨깁니다(중복 방지) */
+function visibleMessages(){
+  let list = Object.values(S.messages).sort((a,b)=> (a.ts||0)-(b.ts||0));
+  if(list.some(m => m.id !== 'm-welcome-01')) list = list.filter(m => m.id !== 'm-welcome-01');
+  return list;
+}
 function renderChat(){
   const el = $('#view-chat');
-  let list = Object.values(S.messages).sort((a,b)=> (a.ts||0)-(b.ts||0));
-  /* 실제 무전이 오가면 로컬 기본 환영문은 숨깁니다(중복 방지) */
-  if(list.some(m => m.id !== 'm-welcome-01')) list = list.filter(m => m.id !== 'm-welcome-01');
-  list = list.slice(-200);
+  const list = visibleMessages().slice(-200);
   const wasNear = (()=>{ const sc = $('#chatScroll'); return !sc || (sc.scrollHeight - sc.scrollTop - sc.clientHeight < 80); })();
 
   const html = list.length ? list.map(m => {
