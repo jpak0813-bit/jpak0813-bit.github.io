@@ -1,0 +1,875 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#141210">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>노가다 현장 합동 비서실</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%23141210'/%3E%3Cpath d='M50 18c-11 0-19 6-22 15h44c-3-9-11-15-22-15z' fill='%23FFC300'/%3E%3Crect x='22' y='36' width='56' height='9' rx='4' fill='%23FFC300'/%3E%3Crect x='42' y='48' width='16' height='26' rx='4' fill='%23FFC300'/%3E%3C/svg%3E">
+<style>
+:root{
+  --ink:#141210; --ink2:#0d0c0a;
+  --panel:#1e1b16; --panel2:#262119; --panel3:#302a20;
+  --yellow:#ffc300; --yellow2:#ffd84d; --yellow-dim:rgba(255,195,0,.16);
+  --text:#f6f0e4; --muted:#a89c86; --muted2:#7d7364;
+  --green:#4cc38a; --red:#ff6b5e; --blue:#7cc6fe;
+  --r:16px;
+  --hazard:repeating-linear-gradient(45deg,#ffc300 0 14px,#141210 14px 28px);
+  --safe-b:env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  background:var(--ink); color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR","Segoe UI",Roboto,sans-serif;
+  font-size:15px; line-height:1.45;
+  padding-bottom:calc(78px + var(--safe-b));
+  min-height:100vh;
+  background-image:
+    radial-gradient(1200px 500px at 80% -10%, rgba(255,195,0,.10), transparent 60%),
+    radial-gradient(900px 400px at -10% 110%, rgba(255,195,0,.06), transparent 60%);
+  background-attachment:fixed;
+}
+header.hdr{
+  position:sticky; top:0; z-index:60;
+  background:linear-gradient(180deg,rgba(30,27,22,.98),rgba(20,18,16,.94));
+  backdrop-filter:blur(8px);
+  border-bottom:1px solid var(--yellow-dim);
+}
+.hdr-in{display:flex;align-items:center;gap:10px;padding:10px 14px 9px;max-width:960px;margin:0 auto}
+.hat{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;font-size:20px;
+  background:linear-gradient(180deg,#ffd84d,#f0b400);box-shadow:0 3px 0 #a67f00, inset 0 1px 0 rgba(255,255,255,.5)}
+.hdr h1{font-size:15.5px;margin:0;letter-spacing:-.3px;font-weight:800}
+.hdr .sub{font-size:11.5px;color:var(--muted);margin-top:1px;display:flex;align-items:center;gap:6px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--muted2);display:inline-block;flex:0 0 auto}
+.dot.live{background:var(--green);box-shadow:0 0 0 0 rgba(76,195,138,.6);animation:pulse 2s infinite}
+.dot.retry{background:var(--red)}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(76,195,138,.55)}70%{box-shadow:0 0 0 7px rgba(76,195,138,0)}100%{box-shadow:0 0 0 0 rgba(76,195,138,0)}}
+.mebtn{margin-left:auto;background:var(--panel2);border:1px solid var(--yellow-dim);color:var(--text);
+  border-radius:999px;padding:7px 12px;font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:6px;cursor:pointer;font-family:inherit}
+.mebtn:active{transform:scale(.97)}
+.hazard{height:6px;background:var(--hazard);opacity:.95}
+main{max-width:960px;margin:0 auto;padding:14px 14px 8px}
+.view{display:none;animation:fade .18s ease}
+.view.on{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+/* ---------- 공통 카드 ---------- */
+.card{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--yellow-dim);border-radius:var(--r);padding:14px}
+.card + .card{margin-top:10px}
+.sec-title{display:flex;align-items:center;gap:8px;margin:0 0 10px;font-size:12.5px;letter-spacing:.4px;color:var(--yellow);text-transform:none;font-weight:800}
+.sec-title .line{flex:1;height:1px;background:linear-gradient(90deg,var(--yellow-dim),transparent)}
+.muted{color:var(--muted)}
+.tiny{font-size:11.5px}
+.row{display:flex;align-items:center;gap:8px}
+.spacer{flex:1}
+.btn{background:var(--yellow);color:#191600;border:none;border-radius:11px;padding:10px 14px;font-weight:800;font-size:14px;cursor:pointer;font-family:inherit;box-shadow:0 2px 0 #a67f00}
+.btn:active{transform:translateY(1px);box-shadow:0 1px 0 #a67f00}
+.btn.ghost{background:var(--panel3);color:var(--text);box-shadow:none;border:1px solid var(--yellow-dim)}
+.btn.sm{padding:7px 11px;font-size:12.5px;border-radius:9px}
+.chip{display:inline-flex;align-items:center;gap:5px;background:var(--panel3);border:1px solid var(--yellow-dim);color:var(--text);
+  border-radius:999px;padding:6px 11px;font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:inherit}
+.chip:active{transform:scale(.97)}
+
+/* ---------- 현장 맵 ---------- */
+.mapwrap{position:relative;border-radius:18px;overflow:hidden;border:1px solid var(--yellow-dim);
+  box-shadow:0 18px 40px -20px rgba(0,0,0,.9), inset 0 0 0 1px rgba(255,255,255,.03);background:#e9e2d4}
+.mapwrap img{display:block;width:100%;height:auto}
+.mapwrap:after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(180deg,rgba(20,18,16,.18),transparent 22%,transparent 78%,rgba(20,18,16,.28))}
+.zone{position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:3px;
+  background:rgba(20,18,16,.86);backdrop-filter:blur(3px);border:1.5px solid var(--yellow);border-radius:13px;
+  padding:6px 9px;color:var(--text);cursor:pointer;font-family:inherit;box-shadow:0 6px 16px -6px rgba(0,0,0,.8);
+  transition:transform .15s ease, box-shadow .15s ease;max-width:46vw}
+.zone:hover{transform:translate(-50%,-50%) scale(1.04)}
+.zone .zn{font-size:11px;font-weight:800;letter-spacing:-.2px;display:flex;align-items:center;gap:3px;white-space:nowrap}
+.zone .za{font-size:12px;line-height:1}
+.zone .zc{position:absolute;top:-7px;right:-7px;background:var(--yellow);color:#191600;border-radius:999px;
+  font-size:10px;font-weight:900;min-width:18px;height:18px;display:grid;place-items:center;padding:0 4px;border:2px solid #141210}
+.zone.busy{border-color:var(--green)}
+.zone.busy .zc{background:var(--green);color:#06210f}
+.mapmeta{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.mapmeta .pill{background:var(--panel2);border:1px solid var(--yellow-dim);border-radius:999px;padding:5px 10px;font-size:11.5px;color:var(--muted)}
+.mapmeta .pill b{color:var(--text)}
+
+/* ---------- 무전기 ---------- */
+.chatbox{display:flex;flex-direction:column;gap:9px;min-height:200px}
+.msg{display:flex;gap:8px;align-items:flex-end;max-width:100%}
+.msg .av{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;font-size:15px;flex:0 0 auto;
+  background:var(--panel3);border:1px solid var(--yellow-dim)}
+.msg .body{max-width:calc(100% - 60px)}
+.msg .who{font-size:11px;color:var(--muted);margin:0 0 3px 2px;display:flex;gap:5px;align-items:center}
+.msg .who b{color:var(--text);font-weight:800;font-size:11.5px}
+.bubble{background:var(--panel2);border:1px solid rgba(255,255,255,.05);border-radius:14px 14px 14px 4px;
+  padding:9px 12px;font-size:14px;word-break:break-word;white-space:pre-wrap;line-height:1.5}
+.msg.mine{justify-content:flex-end}
+.msg.mine .av{order:2}
+.msg.mine .body{order:1;max-width:calc(100% - 60px)}
+.msg.mine .who{justify-content:flex-end;margin-right:2px}
+.msg.mine .bubble{background:linear-gradient(180deg,var(--yellow2),var(--yellow));color:#191600;border:none;border-radius:14px 14px 4px 14px;font-weight:600}
+.msg.sys{justify-content:center}
+.msg.sys .bubble{background:transparent;border:1px dashed var(--yellow-dim);color:var(--muted);font-size:12px;border-radius:999px;padding:5px 12px}
+.chat-scroll{max-height:min(52vh,420px);overflow-y:auto;padding:2px 2px 6px;scrollbar-width:thin}
+.mention{color:var(--yellow);font-weight:800}
+.msg.mine .mention{color:#5a4300}
+.chat-input{position:sticky;bottom:0;background:linear-gradient(180deg,transparent,var(--ink) 30%);padding-top:8px}
+.chat-row{display:flex;gap:7px;align-items:flex-end;background:var(--panel2);border:1px solid var(--yellow-dim);border-radius:14px;padding:6px}
+.chat-row textarea{flex:1;background:transparent;border:none;color:var(--text);font-family:inherit;font-size:15px;
+  resize:none;outline:none;padding:8px 6px;max-height:110px;line-height:1.4}
+.chat-row textarea::placeholder{color:var(--muted2)}
+.send{width:42px;height:42px;border-radius:11px;border:none;background:var(--yellow);color:#191600;font-size:18px;cursor:pointer;flex:0 0 auto;box-shadow:0 2px 0 #a67f00}
+.send:active{transform:translateY(1px)}
+.quick{display:flex;gap:6px;overflow-x:auto;padding:2px 0 8px;scrollbar-width:none}
+.quick::-webkit-scrollbar{display:none}
+
+/* ---------- 작업 일지 ---------- */
+.tsec{margin:0 0 8px 2px;font-size:12px;font-weight:800;color:var(--muted);display:flex;align-items:center;gap:7px}
+.tsec .cnt{background:var(--panel3);border-radius:999px;padding:1px 7px;font-size:11px;color:var(--text)}
+.task{display:flex;gap:10px;align-items:flex-start;background:linear-gradient(180deg,var(--panel2),var(--panel));
+  border:1px solid var(--yellow-dim);border-left:4px solid var(--muted2);border-radius:13px;padding:12px;margin-bottom:8px}
+.task.s-work{border-left-color:var(--yellow)}
+.task.s-done{border-left-color:var(--green);opacity:.72}
+.task.s-done .tt{text-decoration:line-through;color:var(--muted)}
+.task .tt{font-weight:700;font-size:14.5px;line-height:1.35;word-break:break-word}
+.task .tm{font-size:11.5px;color:var(--muted);margin-top:4px;display:flex;gap:7px;flex-wrap:wrap;align-items:center}
+.task .acts{display:flex;flex-direction:column;gap:5px;flex:0 0 auto}
+.iconbtn{background:var(--panel3);border:1px solid var(--yellow-dim);color:var(--text);border-radius:9px;
+  width:34px;height:30px;display:grid;place-items:center;cursor:pointer;font-size:13px}
+.iconbtn:active{transform:scale(.95)}
+.addform{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.addform .line{display:flex;gap:8px}
+input[type=text],select{background:var(--panel3);border:1px solid var(--yellow-dim);color:var(--text);border-radius:11px;
+  padding:11px 12px;font-size:14px;font-family:inherit;outline:none;width:100%}
+input[type=text]:focus,select:focus{border-color:var(--yellow)}
+select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);
+  background-position:calc(100% - 16px) 50%,calc(100% - 11px) 50%;background-size:5px 5px,5px 5px;background-repeat:no-repeat;padding-right:30px}
+
+/* ---------- 인력 ---------- */
+.crew{display:grid;gap:10px}
+@media(min-width:620px){.crew{grid-template-columns:1fr 1fr}}
+.agent{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--yellow-dim);border-radius:14px;padding:13px}
+.agent .top{display:flex;align-items:center;gap:10px}
+.agent .av{width:44px;height:44px;border-radius:13px;display:grid;place-items:center;font-size:22px;background:var(--panel3);border:1px solid var(--yellow-dim)}
+.agent .nm{font-weight:800;font-size:15px;letter-spacing:-.2px}
+.agent .rl{font-size:11.5px;color:var(--muted);margin-top:1px}
+.agent .ctl{display:flex;gap:7px;margin-top:11px}
+.agent .ctl select{font-size:12.5px;padding:8px 10px;padding-right:26px;border-radius:9px}
+.statuspill{font-size:11px;font-weight:800;border-radius:999px;padding:3px 9px;display:inline-flex;align-items:center;gap:4px}
+.st-대기중{background:rgba(168,156,134,.18);color:#cfc4ae}
+.st-작업중{background:rgba(255,195,0,.18);color:var(--yellow)}
+.st-무전대기{background:rgba(124,198,254,.18);color:var(--blue)}
+.st-식사중{background:rgba(255,158,122,.18);color:#ff9e7a}
+.st-외근{background:rgba(201,167,255,.18);color:#c9a7ff}
+.st-합류대기{background:rgba(76,195,138,.16);color:var(--green)}
+
+/* ---------- 하단 탭 ---------- */
+nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:70;padding:6px 8px calc(6px + var(--safe-b));
+  background:linear-gradient(180deg,rgba(20,18,16,.86),rgba(20,18,16,.99));backdrop-filter:blur(12px);
+  border-top:1px solid var(--yellow-dim)}
+.tabs-in{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;max-width:620px;margin:0 auto}
+.tab{background:transparent;border:none;color:var(--muted);font-family:inherit;font-size:10.5px;font-weight:700;
+  display:flex;flex-direction:column;align-items:center;gap:3px;padding:7px 2px 6px;border-radius:12px;cursor:pointer;position:relative}
+.tab .ic{font-size:19px;line-height:1;filter:grayscale(.55) opacity(.8)}
+.tab.on{color:var(--yellow);background:rgba(255,195,0,.09)}
+.tab.on .ic{filter:none;transform:translateY(-1px)}
+.tab .badge{position:absolute;top:2px;right:calc(50% - 22px);background:var(--red);color:#fff;font-size:9.5px;font-weight:900;
+  border-radius:999px;min-width:16px;height:16px;display:grid;place-items:center;padding:0 4px}
+
+/* ---------- 모달 / 시트 ---------- */
+.overlay{position:fixed;inset:0;background:rgba(8,7,6,.72);backdrop-filter:blur(4px);z-index:100;
+  display:none;align-items:flex-end;justify-content:center;padding:0}
+.overlay.on{display:flex}
+.sheet{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--yellow-dim);border-bottom:none;
+  border-radius:20px 20px 0 0;width:100%;max-width:520px;padding:16px 16px calc(18px + var(--safe-b));max-height:88vh;overflow-y:auto;
+  animation:up .22s cubic-bezier(.2,.9,.2,1)}
+@keyframes up{from{transform:translateY(30px);opacity:.4}to{transform:none;opacity:1}}
+.sheet h3{margin:0 0 4px;font-size:16px;display:flex;align-items:center;gap:7px}
+.sheet .desc{color:var(--muted);font-size:12.5px;margin:0 0 14px}
+.fld{margin-bottom:10px}
+.fld label{display:block;font-size:11.5px;color:var(--muted);margin:0 0 5px 3px;font-weight:700}
+.opt{display:flex;align-items:center;gap:10px;background:var(--panel3);border:1px solid var(--yellow-dim);border-radius:13px;
+  padding:11px 13px;margin-bottom:8px;cursor:pointer;font-family:inherit;color:var(--text);width:100%;text-align:left}
+.opt:active{transform:scale(.99)}
+.opt .em{font-size:20px}
+.opt .t{font-weight:800;font-size:14px}
+.opt .s{font-size:11.5px;color:var(--muted)}
+pre.code{background:var(--ink2);border:1px solid var(--yellow-dim);border-radius:11px;padding:11px;overflow-x:auto;
+  font-size:11px;line-height:1.5;color:#d8cfbc;white-space:pre;margin:8px 0 0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.toast{position:fixed;left:50%;transform:translateX(-50%) translateY(-14px);top:12px;z-index:200;
+  background:var(--yellow);color:#191600;font-weight:800;font-size:13px;padding:9px 15px;border-radius:999px;
+  box-shadow:0 10px 28px -10px rgba(0,0,0,.9);opacity:0;pointer-events:none;transition:.22s}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+details.help{margin-top:12px;border:1px solid var(--yellow-dim);border-radius:13px;padding:0 12px;background:var(--panel)}
+details.help summary{cursor:pointer;padding:12px 0;font-size:13px;font-weight:800;color:var(--yellow);list-style:none}
+details.help summary::-webkit-details-marker{display:none}
+details.help[open] summary{border-bottom:1px solid var(--yellow-dim);margin-bottom:10px}
+details.help .body{padding-bottom:12px;color:var(--muted);font-size:12.5px;line-height:1.6}
+.empty{text-align:center;color:var(--muted2);font-size:12.5px;padding:18px 8px}
+</style>
+</head>
+<body>
+
+<header class="hdr">
+  <div class="hdr-in">
+    <div class="hat">👷</div>
+    <div>
+      <h1>노가다 현장 합동 비서실</h1>
+      <div class="sub"><span class="dot" id="connDot"></span><span id="connTxt">무전망 연결중…</span></div>
+    </div>
+    <button class="mebtn" id="meBtn"><span id="meEmoji">🧑‍✈️</span><span id="meName">사장님</span></button>
+  </div>
+  <div class="hazard"></div>
+</header>
+
+<main>
+  <section class="view on" id="view-map"></section>
+  <section class="view" id="view-chat"></section>
+  <section class="view" id="view-tasks"></section>
+  <section class="view" id="view-crew"></section>
+</main>
+
+<nav class="tabs">
+  <div class="tabs-in">
+    <button class="tab on" data-tab="map"><span class="ic">🗺️</span>현장 맵</button>
+    <button class="tab" data-tab="chat"><span class="ic">💬</span>무전기<span class="badge" id="chatBadge" style="display:none">0</span></button>
+    <button class="tab" data-tab="tasks"><span class="ic">📋</span>작업 일지</button>
+    <button class="tab" data-tab="crew"><span class="ic">👷</span>인력 현황</button>
+  </div>
+</nav>
+
+<div class="overlay" id="overlay"><div class="sheet" id="sheet"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* =========================================================
+   노가다 현장 합동 비서실
+   - 저장/실시간: Firebase RTDB (CFG.rtdbUrl) 또는 임시 ntfy 중계
+   ========================================================= */
+const QS = new URLSearchParams(location.search);
+const CFG = {
+  // ?room=이름 으로 또 다른 현장을 만들 수 있습니다.
+  room: (QS.get('room') || 'nogada01').replace(/[^A-Za-z0-9_-]/g, ''),
+  // Firebase Realtime Database URL. 값이 있으면 자동으로 RTDB 모드로 동작합니다.
+  // 예: ?db=https://pickle-nogada-office-default-rtdb.firebaseio.com
+  rtdbUrl: QS.get('db') || '',
+  // 임시 실시간 채널 (계정 불필요, 메시지 12시간 보관)
+  ntfyTopic: QS.get('ch') || 'nogada-office-5v8n3kq7w2xm9lyt'
+};
+
+const ZONES = {
+  office: { name: '현장 사무소', emoji: '🏠', x: 29, y: 27 },
+  work:   { name: '작업 구역',  emoji: '🏗️', x: 67, y: 25 },
+  yard:   { name: '자재 야적장', emoji: '🧱', x: 33, y: 66 },
+  break:  { name: '함바 휴게실', emoji: '☕', x: 80, y: 57 }
+};
+const STATUSES = ['대기중','작업중','무전대기','식사중','외근','합류대기'];
+const ME_OPTIONS = [
+  { id:'jingyu', name:'사장님', emoji:'🧑‍✈️', role:'현장 발주처', desc:'진규 님 — 현장 지시와 결재' },
+  { id:'roen',   name:'로엔',   emoji:'🦺', role:'현장소장',   desc:'로엔 피클 — 현장 총괄' },
+  { id:'binna',  name:'빈나',   emoji:'🧡', role:'안전/일정반장', desc:'박빈나 님의 피클' },
+  { id:'guest',  name:'게스트', emoji:'🙋', role:'방문자',     desc:'구경만 하는 손님' }
+];
+
+const SEED_AGENTS = {
+  roen:  { id:'roen',  name:'로엔', role:'현장소장', emoji:'🦺', status:'대기중', zone:'office' },
+  binna: { id:'binna', name:'박빈나 피클', role:'안전/일정반장', emoji:'🧡', status:'합류대기', zone:'break' }
+};
+const WELCOME = {
+  id:'m-welcome-01', from:'roen', name:'로엔', emoji:'🦺', sys:false,
+  text:'🚧 현장 사무소 개설 완료! @로엔 또는 @빈나 로 불러주세요.\n급한 건은 무전기에 남겨주세요, 소장이 바로 달려갑니다.', ts:0
+};
+
+const S = { agents:{}, tasks:{}, messages:{}, me:null, conn:'connecting', tab:'map', unread:0, lastSeen:0 };
+
+/* ---------- 유틸 ---------- */
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+const now = () => Date.now();
+function fmtTime(ts){
+  if(!ts) return '';
+  const d = new Date(ts), n = new Date();
+  const hm = String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+  if(d.toDateString() === n.toDateString()) return hm;
+  return (d.getMonth()+1) + '/' + d.getDate() + ' ' + hm;
+}
+function ago(ts){
+  if(!ts) return '기록 없음';
+  const s = Math.floor((now()-ts)/1000);
+  if(s < 60) return '방금';
+  if(s < 3600) return Math.floor(s/60)+'분 전';
+  if(s < 86400) return Math.floor(s/3600)+'시간 전';
+  return Math.floor(s/86400)+'일 전';
+}
+function mentionize(text){
+  return esc(text).replace(/@(로엔|빈나|박빈나 피클|사장님|게스트)/g, '<span class="mention">@$1</span>');
+}
+function toast(msg){
+  const t = $('#toast'); t.textContent = msg; t.classList.add('on');
+  clearTimeout(t._h); t._h = setTimeout(()=>t.classList.remove('on'), 1800);
+}
+
+/* ---------- 로컬 저장 ---------- */
+const LS = {
+  get(k, d){ try{ const v = localStorage.getItem('nogada.'+k); return v ? JSON.parse(v) : d; }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem('nogada.'+k, JSON.stringify(v)); }catch(e){} }
+};
+function persistState(){
+  LS.set('state', { agents:S.agents, tasks:S.tasks, at: now() });
+}
+
+/* ---------- 상태 반영 ---------- */
+function applyRemoteAgent(id, a){
+  if(!a) return;
+  a.id = id;
+  const c = S.agents[id];
+  if(!c || (a.updatedAt||0) >= (c.updatedAt||0)) S.agents[id] = a;
+}
+function applyRemoteTask(id, t){
+  if(!t) return;
+  t.id = id;
+  const c = S.tasks[id];
+  if(!c || (t.updatedAt||0) >= (c.updatedAt||0)) S.tasks[t.id] = t;
+}
+function applyRemoteMsg(m){
+  if(!m || !m.id || S.messages[m.id]) return;
+  S.messages[m.id] = m;
+  if(m.ts > S.lastSeen && (S.me ? m.from !== S.me.id : true)){
+    if(S.tab !== 'chat'){
+      S.unread++;
+      if(m.ts > (S._bootAt || 0) && !m.sys) toast('📻 ' + (m.name || '무전') + ': ' + String(m.text || '').slice(0, 24));
+    }
+  }
+}
+function replaceAgents(obj){
+  if(!obj) return;
+  const seen = {};
+  for(const k in obj){ if(obj[k]){ applyRemoteAgent(k, obj[k]); seen[k]=1; } }
+  for(const k in S.agents){ if(!seen[k]) delete S.agents[k]; }
+}
+function replaceTasks(obj){
+  if(!obj) return;
+  const seen = {};
+  for(const k in obj){ if(obj[k]){ applyRemoteTask(k, obj[k]); seen[k]=1; } }
+  for(const k in S.tasks){ if(!seen[k]) delete S.tasks[k]; }
+}
+function mergeAgents(obj){ for(const k in obj){ if(obj[k]) applyRemoteAgent(k, obj[k]); } }
+function mergeTasks(obj){ for(const k in obj){ if(obj[k]) applyRemoteTask(k, obj[k]); } }
+function mergeSnapshot(root){
+  if(!root || typeof root !== 'object') return;
+  if(root.agents) replaceAgents(root.agents);
+  if(root.tasks) replaceTasks(root.tasks);
+  if(root.messages) for(const k in root.messages){ const m = root.messages[k]; if(m){ m.id = m.id || k; applyRemoteMsg(m); } }
+}
+
+/* ---------- 전송 계층 ---------- */
+const Wire = {
+  mode: CFG.rtdbUrl ? 'rtdb' : 'ntfy',
+  base(){ return CFG.rtdbUrl.replace(/\/+$/,''); },
+  url(path){ return this.base() + '/rooms/' + CFG.room + path + '.json'; },
+
+  async start(){
+    try{
+      await this.pull();
+      this.setConn('live');
+    }catch(e){ this.setConn('retry'); }
+    this.stream();
+    setInterval(()=>{ if(S.conn !== 'live'){ this.pull().then(()=>this.setConn('live')).catch(()=>{}); } }, 15000);
+  },
+  setConn(c){
+    S.conn = c;
+    const dot = $('#connDot'), txt = $('#connTxt');
+    dot.className = 'dot ' + (c === 'live' ? 'live' : c === 'retry' ? 'retry' : '');
+    txt.textContent = c === 'live'
+      ? (this.mode === 'rtdb' ? '무전망 연결됨 · Firebase' : '무전망 연결됨 · 임시 중계(ntfy)')
+      : (c === 'retry' ? '무전망 재접속 중…' : '무전망 연결중…');
+  },
+
+  /* RTDB */
+  async pull(){
+    if(this.mode === 'rtdb'){
+      const r = await fetch(this.url('') + '?t=' + now());
+      if(!r.ok) throw new Error('rtdb ' + r.status);
+      mergeSnapshot(await r.json());
+      return;
+    }
+    /* ntfy 캐시 재생 */
+    const r = await fetch('https://ntfy.sh/' + CFG.ntfyTopic + '/json?poll=1&since=all&t=' + now());
+    if(!r.ok) throw new Error('ntfy ' + r.status);
+    const txt = await r.text();
+    txt.split('\n').filter(Boolean).forEach(line => {
+      try{ const n = JSON.parse(line); if(n.event === 'message' && n.message) applyEnvelope(JSON.parse(n.message)); }catch(e){}
+    });
+  },
+  stream(){
+    if(this.mode === 'rtdb'){
+      let t = null;
+      try{
+        const es = new EventSource(this.url(''));
+        const reload = () => { clearTimeout(t); t = setTimeout(()=>{ this.pull().catch(()=>{}); }, 350); };
+        es.addEventListener('put', reload);
+        es.addEventListener('patch', reload);
+        es.addEventListener('open', ()=> this.setConn('live'));
+        es.addEventListener('error', ()=> this.setConn('retry'));
+        this._es = es;
+      }catch(e){}
+      return;
+    }
+    try{
+      const es = new EventSource('https://ntfy.sh/' + CFG.ntfyTopic + '/sse?since=all');
+      es.onopen = () => this.setConn('live');
+      es.onerror = () => this.setConn('retry');
+      es.onmessage = ev => {
+        try{
+          const n = JSON.parse(ev.data);
+          if(n.event === 'message' && n.message) applyEnvelope(JSON.parse(n.message));
+        }catch(e){}
+      };
+      this._es = es;
+    }catch(e){}
+  },
+
+  async push(env){
+    if(this.mode === 'rtdb'){
+      const d = env.d || {};
+      let path, method = 'PUT', body = d;
+      if(env.t === 'msg'){ path = '/messages/' + d.id; }
+      else if(env.t === 'task'){ path = '/tasks/' + d.id; }
+      else if(env.t === 'agent'){ path = '/agents/' + d.id; }
+      else if(env.t === 'del-task'){ path = '/tasks/' + d.id; method = 'DELETE'; body = null; }
+      else if(env.t === 'del-agent'){ path = '/agents/' + d.id; method = 'DELETE'; body = null; }
+      else if(env.t === 'state'){
+        /* 전체 상태는 각 노드에 나눠 씁니다 */
+        for(const k in (d.agents||{})) await this.push({ t:'agent', d: d.agents[k] });
+        for(const k in (d.tasks||{})) await this.push({ t:'task', d: d.tasks[k] });
+        return;
+      } else return;
+      const opt = { method };
+      if(body) { opt.body = JSON.stringify(body); opt.headers = { 'Content-Type':'application/json' }; }
+      const r = await fetch(this.url(path), opt);
+      if(!r.ok) throw new Error('rtdb write ' + r.status);
+      return;
+    }
+    /* ntfy */
+    const r = await fetch('https://ntfy.sh/' + CFG.ntfyTopic, { method:'POST', body: JSON.stringify(env) });
+    if(!r.ok) throw new Error('ntfy write ' + r.status);
+  }
+};
+
+function applyEnvelope(env){
+  if(!env || !env.t) return;
+  const d = env.d || {};
+  if(env.t === 'msg') applyRemoteMsg(d);
+  else if(env.t === 'task') applyRemoteTask(d.id, d);
+  else if(env.t === 'del-task') delete S.tasks[d.id];
+  else if(env.t === 'agent') applyRemoteAgent(d.id, d);
+  else if(env.t === 'del-agent') delete S.agents[d.id];
+  else if(env.t === 'state'){ mergeAgents(d.agents || {}); mergeTasks(d.tasks || {}); }
+  else if(env.t === 'hello'){ /* 새 참가자에게 상태 알려주기 */ if(Object.keys(S.agents).length) announceState(); }
+  render(); persistState();
+}
+function announceState(){
+  Wire.push({ t:'state', ts: now(), d:{ agents: S.agents, tasks: S.tasks } }).catch(()=>{});
+}
+
+/* ---------- 동작 ---------- */
+function sendMessage(text){
+  text = (text || '').trim();
+  if(!text) return;
+  const m = { id:'m-' + uid(), from: S.me.id, name: S.me.name, emoji: S.me.emoji, text, ts: now() };
+  S.messages[m.id] = m;
+  render(); persistState();
+  Wire.push({ t:'msg', ts: m.ts, d: m }).catch(()=> toast('무전 실패 — 잠시 후 다시'));
+  setTimeout(scrollChatBottom, 30);
+}
+function upsertTask(t){
+  t.updatedAt = now();
+  S.tasks[t.id] = t; render(); persistState();
+  Wire.push({ t:'task', ts: t.updatedAt, d: t }).catch(()=> toast('동기화 실패'));
+}
+function removeTask(id){
+  delete S.tasks[id]; render(); persistState();
+  Wire.push({ t:'del-task', ts: now(), d:{ id } }).catch(()=>{});
+}
+function upsertAgent(a){
+  a.updatedAt = now();
+  S.agents[a.id] = a; render(); persistState();
+  Wire.push({ t:'agent', ts: a.updatedAt, d: a }).catch(()=> toast('동기화 실패'));
+}
+function removeAgent(id){
+  delete S.agents[id]; render(); persistState();
+  Wire.push({ t:'del-agent', ts: now(), d:{ id } }).catch(()=>{});
+}
+
+/* ---------- 렌더 ---------- */
+let rafPending = false;
+function render(){
+  if(rafPending) return;
+  rafPending = true;
+  requestAnimationFrame(()=>{
+    rafPending = false;
+    renderHeader();
+    if(S.tab === 'map') renderMap();
+    if(S.tab === 'chat') renderChat();
+    if(S.tab === 'tasks') renderTasks();
+    if(S.tab === 'crew') renderCrew();
+    renderBadge();
+  });
+}
+function renderHeader(){
+  if(!S.me) return;
+  $('#meEmoji').textContent = S.me.emoji;
+  $('#meName').textContent = S.me.name;
+}
+function renderBadge(){
+  const b = $('#chatBadge');
+  if(S.unread > 0 && S.tab !== 'chat'){ b.textContent = S.unread > 9 ? '9+' : S.unread; b.style.display = 'grid'; }
+  else b.style.display = 'none';
+}
+function agentsIn(zone){ return Object.values(S.agents).filter(a => a.zone === zone); }
+
+function renderMap(){
+  const el = $('#view-map');
+  const agents = Object.values(S.agents);
+  const zones = Object.keys(ZONES).map(k => {
+    const z = ZONES[k], list = agentsIn(k);
+    const busy = list.some(a => a.status === '작업중');
+    const faces = list.slice(0,3).map(a => a.emoji).join('');
+    return '<button class="zone' + (busy ? ' busy' : '') + '" data-zone="' + k + '" style="left:' + z.x + '%;top:' + z.y + '%">'
+      + (list.length ? '<span class="zc">' + list.length + '</span>' : '')
+      + '<span class="zn">' + z.emoji + ' ' + z.name + '</span>'
+      + '<span class="za">' + (faces || '<span style="opacity:.45">비어 있음</span>') + '</span>'
+      + '</button>';
+  }).join('');
+
+  const working = agents.filter(a => a.status === '작업중').length;
+  const openTasks = Object.values(S.tasks).filter(t => t.status !== 'done').length;
+
+  el.innerHTML = ''
+    + '<div class="mapwrap"><img src="' + IMG + '" alt="노가다 현장 3D 지도">' + zones + '</div>'
+    + '<div class="mapmeta">'
+    +   '<span class="pill">👷 출근 <b>' + agents.length + '명</b></span>'
+    +   '<span class="pill">⚡ 작업중 <b>' + working + '명</b></span>'
+    +   '<span class="pill">📋 남은 일 <b>' + openTasks + '건</b></span>'
+    +   '<span class="pill">💬 무전 <b>' + Object.keys(S.messages).length + '건</b></span>'
+    + '</div>'
+    + '<div class="card" style="margin-top:12px">'
+    +   '<div class="sec-title">🛠️ 지금 현장<span class="line"></span></div>'
+    +   (agents.length ? agents.map(a =>
+          '<div class="row" style="padding:7px 0;border-bottom:1px dashed rgba(255,195,0,.09)">'
+          + '<div style="width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:var(--panel3);font-size:15px">' + a.emoji + '</div>'
+          + '<div style="flex:1;min-width:0"><div style="font-weight:800;font-size:13.5px">' + esc(a.name) + '</div>'
+          + '<div class="tiny muted">' + esc(a.role || '') + ' · ' + (ZONES[a.zone] ? ZONES[a.zone].name : '미배치') + '</div></div>'
+          + '<span class="statuspill st-' + esc(a.status) + '">' + esc(a.status) + '</span>'
+          + '</div>').join('')
+        : '<div class="empty">아직 출근한 인력이 없습니다. 인력 현황에서 추가하세요.</div>')
+    + '</div>';
+}
+
+function renderChat(){
+  const el = $('#view-chat');
+  const list = Object.values(S.messages).sort((a,b)=> (a.ts||0)-(b.ts||0)).slice(-200);
+  const wasNear = (()=>{ const sc = $('#chatScroll'); return !sc || (sc.scrollHeight - sc.scrollTop - sc.clientHeight < 80); })();
+
+  const html = list.length ? list.map(m => {
+    const mine = S.me && m.from === S.me.id;
+    return '<div class="msg' + (mine ? ' mine' : '') + '">'
+      + '<div class="av">' + (m.emoji || '💬') + '</div>'
+      + '<div class="body">'
+      +   '<div class="who"><b>' + esc(m.name || '무명') + '</b><span>' + fmtTime(m.ts) + '</span></div>'
+      +   '<div class="bubble">' + mentionize(m.text || '') + '</div>'
+      + '</div></div>';
+  }).join('') : '<div class="empty">아직 무전 기록이 없습니다.<br>아래에 첫 무전을 남겨보세요.</div>';
+
+  const chips = Array.from(new Set(Object.values(S.agents).map(a => a.name))).slice(0,6)
+    .map(n => '<button class="chip" data-mention="' + esc(n) + '">@' + esc(n) + '</button>').join('');
+
+  el.innerHTML = ''
+    + '<div class="card">'
+    +   '<div class="sec-title">📻 무전기 <span class="tiny muted" style="font-weight:600">실시간</span><span class="line"></span></div>'
+    +   '<div class="chat-scroll" id="chatScroll">' + html + '</div>'
+    +   '<div class="quick">' + chips
+    +     '<button class="chip" data-quick="지금 어디야?">📍 위치 확인</button>'
+    +     '<button class="chip" data-quick="자재 들어왔어?">🧱 자재 확인</button>'
+    +     '<button class="chip" data-quick="안전 점검 한 번 돌아줘.">⛑️ 안전 점검</button>'
+    +   '</div>'
+    +   '<div class="chat-row">'
+    +     '<textarea id="msgInput" rows="1" placeholder="무전 내용을 입력하세요 (@로엔 으로 호출)" enterkeyhint="send"></textarea>'
+    +     '<button class="send" id="sendBtn">➤</button>'
+    +   '</div>'
+    + '</div>';
+
+  const inp = $('#msgInput');
+  inp.addEventListener('input', ()=>{ inp.style.height = 'auto'; inp.style.height = Math.min(inp.scrollHeight, 110) + 'px'; });
+  inp.addEventListener('keydown', e => {
+    if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); sendMessage(inp.value); inp.value=''; inp.style.height='auto'; }
+  });
+  $('#sendBtn').addEventListener('click', ()=>{ sendMessage(inp.value); inp.value=''; inp.style.height='auto'; });
+  el.querySelectorAll('[data-mention]').forEach(b => b.addEventListener('click', ()=>{
+    inp.value = (inp.value ? inp.value + ' ' : '') + '@' + b.dataset.mention + ' ';
+    inp.focus();
+  }));
+  el.querySelectorAll('[data-quick]').forEach(b => b.addEventListener('click', ()=>{ inp.value = b.dataset.quick; inp.focus(); }));
+
+  if(wasNear) scrollChatBottom();
+}
+function scrollChatBottom(){
+  const sc = $('#chatScroll');
+  if(sc) sc.scrollTop = sc.scrollHeight;
+}
+
+function renderTasks(){
+  const el = $('#view-tasks');
+  const groups = [
+    { k:'todo', label:'대기', cls:'' },
+    { k:'work', label:'진행중', cls:'s-work' },
+    { k:'done', label:'완료', cls:'s-done' }
+  ];
+  const all = Object.values(S.tasks);
+  const ownerOpts = Object.values(S.agents).map(a => '<option value="' + esc(a.id) + '">' + esc(a.emoji + ' ' + a.name) + '</option>').join('');
+
+  let body = '';
+  groups.forEach(g => {
+    const list = all.filter(t => (t.status || 'todo') === g.k).sort((a,b)=>(a.updatedAt||0)-(b.updatedAt||0));
+    body += '<div class="tsec">' + g.label + ' <span class="cnt">' + list.length + '</span></div>';
+    body += list.length ? list.map(t => {
+      const owner = S.agents[t.owner];
+      const next = g.k === 'todo' ? 'work' : g.k === 'work' ? 'done' : 'todo';
+      const nextLabel = g.k === 'todo' ? '▶' : g.k === 'work' ? '✔' : '↺';
+      return '<div class="task ' + g.cls + '">'
+        + '<div style="flex:1;min-width:0">'
+        +   '<div class="tt">' + esc(t.title) + '</div>'
+        +   '<div class="tm">' + (owner ? '<span>' + owner.emoji + ' ' + esc(owner.name) + '</span>' : '<span>담당 미정</span>')
+        +     '<span>· ' + ago(t.updatedAt) + '</span></div>'
+        + '</div>'
+        + '<div class="acts">'
+        +   '<button class="iconbtn" data-adv="' + esc(t.id) + '" data-to="' + next + '" title="상태 변경">' + nextLabel + '</button>'
+        +   '<button class="iconbtn" data-del="' + esc(t.id) + '" title="삭제">🗑</button>'
+        + '</div></div>';
+    }).join('') : '<div class="empty" style="padding:8px">없음</div>';
+  });
+
+  el.innerHTML = ''
+    + '<div class="card">'
+    +   '<div class="sec-title">📋 작업 일지<span class="line"></span></div>'
+    +   body
+    +   '<div class="addform">'
+    +     '<div class="line"><input type="text" id="taskTitle" placeholder="새 작업 (예: 3층 거푸집 해체)"></div>'
+    +     '<div class="line">'
+    +       '<select id="taskOwner"><option value="">담당자 선택</option>' + ownerOpts + '</select>'
+    +       '<button class="btn" id="addTask" style="flex:0 0 auto">추가</button>'
+    +     '</div>'
+    +   '</div>'
+    + '</div>';
+
+  $('#addTask').addEventListener('click', ()=>{
+    const t = $('#taskTitle').value.trim();
+    if(!t) { toast('작업 내용을 입력하세요'); return; }
+    upsertTask({ id:'t-' + uid(), title:t, owner: $('#taskOwner').value || '', status:'todo', ts: now() });
+    $('#taskTitle').value = '';
+  });
+  $('#taskTitle').addEventListener('keydown', e => { if(e.key === 'Enter') $('#addTask').click(); });
+  el.querySelectorAll('[data-adv]').forEach(b => b.addEventListener('click', ()=>{
+    const t = S.tasks[b.dataset.adv]; if(!t) return;
+    const nt = Object.assign({}, t, { status: b.dataset.to });
+    upsertTask(nt);
+  }));
+  el.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', ()=>{
+    if(confirm('이 작업을 지울까요?')) removeTask(b.dataset.del);
+  }));
+}
+
+function renderCrew(){
+  const el = $('#view-crew');
+  const agents = Object.values(S.agents);
+  const opts = (cur, list) => list.map(v => '<option value="' + esc(v) + '"' + (v === cur ? ' selected' : '') + '>' + esc(v) + '</option>').join('');
+
+  const cards = agents.map(a => {
+    const zopts = Object.keys(ZONES).map(k => '<option value="' + k + '"' + (a.zone === k ? ' selected' : '') + '>' + ZONES[k].name + '</option>').join('');
+    return '<div class="agent" data-aid="' + esc(a.id) + '">'
+      + '<div class="top">'
+      +   '<div class="av">' + a.emoji + '</div>'
+      +   '<div style="flex:1;min-width:0">'
+      +     '<div class="nm">' + esc(a.name) + '</div>'
+      +     '<div class="rl">' + esc(a.role || '') + '</div>'
+      +   '</div>'
+      +   '<span class="statuspill st-' + esc(a.status) + '">' + esc(a.status) + '</span>'
+      + '</div>'
+      + '<div class="ctl">'
+      +   '<select data-astatus="' + esc(a.id) + '">' + opts(a.status, STATUSES) + '</select>'
+      +   '<select data-azone="' + esc(a.id) + '">' + zopts + '</select>'
+      + '</div>'
+      + '<div class="tm tiny muted" style="margin-top:8px;display:flex;align-items:center;gap:6px">'
+      +   '<span>업데이트 ' + ago(a.updatedAt) + '</span><span class="spacer"></span>'
+      +   '<button class="chip" data-call="' + esc(a.name) + '" style="padding:4px 9px;font-size:11px">📻 무전</button>'
+      +   '<button class="iconbtn" data-adel="' + esc(a.id) + '" style="width:28px;height:26px;font-size:11px">🗑</button>'
+      + '</div></div>';
+  }).join('');
+
+  const ep = Wire.mode === 'rtdb'
+    ? CFG.rtdbUrl.replace(/\/+$/,'') + '/rooms/' + CFG.room + '.json'
+    : 'https://ntfy.sh/' + CFG.ntfyTopic;
+  const sample = Wire.mode === 'rtdb'
+    ? 'curl -X PUT "' + CFG.rtdbUrl.replace(/\/+$/,'') + '/rooms/' + CFG.room + '/messages/m-001.json" \\\n  -H "Content-Type: application/json" \\\n  -d \'{"from":"gemini","name":"제미나이","emoji":"🤖","text":"자재 검수 끝냈습니다","ts":' + now() + '}\''
+    : 'curl -d \'{"t":"msg","d":{"id":"m-001","from":"gemini","name":"제미나이","emoji":"🤖","text":"자재 검수 끝냈습니다","ts":' + now() + '}}\' \\\n  https://ntfy.sh/' + CFG.ntfyTopic;
+
+  el.innerHTML = ''
+    + '<div class="sec-title">👷 인력 현황 <span class="tiny muted" style="font-weight:600">' + agents.length + '명 출근</span><span class="line"></span></div>'
+    + '<div class="crew">' + (cards || '<div class="empty">인력이 없습니다.</div>') + '</div>'
+    + '<button class="btn ghost" id="addAgentBtn" style="width:100%;margin-top:10px">＋ 인력 · 봇 추가</button>'
+    + '<details class="help"><summary>🔌 외부 봇(제미나이·Cue 등) 연결 방법</summary>'
+    +   '<div class="body">'
+    +     '<div>현재 채널: <b>' + (Wire.mode === 'rtdb' ? 'Firebase RTDB' : '임시 ntfy 중계') + '</b></div>'
+    +     '<div style="margin-top:4px;word-break:break-all">' + esc(ep) + '</div>'
+    +     '<div style="margin-top:10px">아래처럼 한 줄 POST 하면 무전기에 바로 올라옵니다.</div>'
+    +     '<pre class="code">' + esc(sample) + '</pre>'
+    +     '<div style="margin-top:10px">현장 규칙: <b>agents</b> / <b>messages</b> / <b>tasks</b> 세 갈래만 쓰면 됩니다.</div>'
+    +   '</div>'
+    + '</details>';
+
+  $('#addAgentBtn').addEventListener('click', openAddAgent);
+  el.querySelectorAll('[data-astatus]').forEach(s => s.addEventListener('change', ()=>{
+    const a = S.agents[s.dataset.astatus]; if(!a) return;
+    upsertAgent(Object.assign({}, a, { status: s.value }));
+    toast(a.name + ' → ' + s.value);
+  }));
+  el.querySelectorAll('[data-azone]').forEach(s => s.addEventListener('change', ()=>{
+    const a = S.agents[s.dataset.azone]; if(!a) return;
+    upsertAgent(Object.assign({}, a, { zone: s.value }));
+  }));
+  el.querySelectorAll('[data-adel]').forEach(b => b.addEventListener('click', ()=>{
+    const a = S.agents[b.dataset.adel]; if(!a) return;
+    if(confirm(a.name + ' 님을 명단에서 뺄까요?')) removeAgent(b.dataset.adel);
+  }));
+  el.querySelectorAll('[data-call]').forEach(b => b.addEventListener('click', ()=>{
+    switchTab('chat');
+    setTimeout(()=>{ const i = $('#msgInput'); if(i){ i.value = '@' + b.dataset.call + ' '; i.focus(); } }, 60);
+  }));
+}
+
+/* ---------- 모달 ---------- */
+function openSheet(html){ $('#sheet').innerHTML = html; $('#overlay').classList.add('on'); }
+function closeSheet(){ $('#overlay').classList.remove('on'); }
+$('#overlay').addEventListener('click', e => { if(e.target.id === 'overlay') closeSheet(); });
+
+function openIdentity(first){
+  openSheet(
+    '<h3>🪪 출입증 발급</h3>'
+    + '<p class="desc">' + (first ? '현장에 처음 오셨네요. 누구로 출입하시겠어요?' : '지금 누구로 출입할지 고르세요.') + '</p>'
+    + ME_OPTIONS.map(o =>
+        '<button class="opt" data-me="' + o.id + '">'
+        + '<span class="em">' + o.emoji + '</span>'
+        + '<span style="flex:1"><span class="t">' + o.name + '</span><br><span class="s">' + o.role + ' · ' + o.desc + '</span></span>'
+        + '</button>').join('')
+  );
+  document.querySelectorAll('[data-me]').forEach(b => b.addEventListener('click', ()=>{
+    const o = ME_OPTIONS.find(x => x.id === b.dataset.me);
+    S.me = o; LS.set('me', o); closeSheet(); renderHeader();
+  }));
+}
+
+function openZone(k){
+  const z = ZONES[k], list = agentsIn(k);
+  openSheet(
+    '<h3>' + z.emoji + ' ' + z.name + '</h3>'
+    + '<p class="desc">이 구역에 ' + list.length + '명 있습니다.</p>'
+    + (list.length ? list.map(a =>
+        '<div class="row" style="padding:10px 0;border-bottom:1px dashed rgba(255,195,0,.1)">'
+        + '<div style="width:36px;height:36px;border-radius:11px;display:grid;place-items:center;background:var(--panel3);font-size:18px">' + a.emoji + '</div>'
+        + '<div style="flex:1"><div style="font-weight:800">' + esc(a.name) + '</div><div class="tiny muted">' + esc(a.role || '') + '</div></div>'
+        + '<span class="statuspill st-' + esc(a.status) + '">' + esc(a.status) + '</span>'
+        + '<button class="chip" data-zcall="' + esc(a.name) + '">📻</button>'
+        + '</div>').join('') : '<div class="empty">비어 있습니다.</div>')
+    + '<button class="btn ghost" id="zoneMine" style="width:100%;margin-top:12px">내 위치를 여기로</button>'
+  );
+  document.querySelectorAll('[data-zcall]').forEach(b => b.addEventListener('click', ()=>{
+    closeSheet(); switchTab('chat');
+    setTimeout(()=>{ const i = $('#msgInput'); if(i){ i.value = '@' + b.dataset.zcall + ' '; i.focus(); } }, 60);
+  }));
+  $('#zoneMine').addEventListener('click', ()=>{
+    const me = S.agents[S.me.id];
+    if(me) upsertAgent(Object.assign({}, me, { zone: k }));
+    else upsertAgent({ id:S.me.id, name:S.me.name, role:S.me.role, emoji:S.me.emoji, status:'작업중', zone:k });
+    closeSheet(); toast('내 위치를 ' + z.name + '(으)로 옮겼습니다');
+  });
+}
+
+function openAddAgent(){
+  openSheet(
+    '<h3>＋ 인력 · 봇 추가</h3>'
+    + '<p class="desc">가족·동료·다른 AI 비서를 현장에 부를 수 있습니다.</p>'
+    + '<div class="fld"><label>이름</label><input type="text" id="naName" placeholder="예: 제미나이 / Cue / 박세은"></div>'
+    + '<div class="fld"><label>직책</label><input type="text" id="naRole" placeholder="예: 자재검수반장"></div>'
+    + '<div class="fld"><label>이모지</label><input type="text" id="naEmoji" placeholder="예: 🤖" maxlength="4" value="🤖"></div>'
+    + '<div class="row" style="gap:10px">'
+    +   '<div class="fld" style="flex:1"><label>상태</label><select id="naStatus">' + STATUSES.map(s => '<option>' + s + '</option>').join('') + '</select></div>'
+    +   '<div class="fld" style="flex:1"><label>구역</label><select id="naZone">' + Object.keys(ZONES).map(k => '<option value="' + k + '">' + ZONES[k].name + '</option>').join('') + '</select></div>'
+    + '</div>'
+    + '<button class="btn" id="naSave" style="width:100%;margin-top:6px">현장에 투입</button>'
+  );
+  $('#naSave').addEventListener('click', ()=>{
+    const name = $('#naName').value.trim();
+    if(!name){ toast('이름을 입력하세요'); return; }
+    const id = name.replace(/\s+/g, '').toLowerCase().slice(0,12) + '-' + Math.random().toString(36).slice(2,4);
+    upsertAgent({ id, name, role: $('#naRole').value.trim() || '현장 인력', emoji: $('#naEmoji').value.trim() || '🙂',
+                  status: $('#naStatus').value, zone: $('#naZone').value });
+    closeSheet(); toast(name + ' 투입 완료');
+  });
+}
+
+/* ---------- 탭 ---------- */
+function switchTab(t){
+  S.tab = t;
+  document.querySelectorAll('.tab').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
+  document.querySelectorAll('.view').forEach(v => v.classList.toggle('on', v.id === 'view-' + t));
+  if(t === 'chat'){ S.unread = 0; S.lastSeen = now(); LS.set('lastSeen', S.lastSeen); }
+  render();
+  if(t === 'chat') setTimeout(scrollChatBottom, 40);
+  window.scrollTo({ top:0, behavior:'instant' in window ? 'instant' : 'auto' });
+}
+document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', ()=> switchTab(b.dataset.tab)));
+$('#meBtn').addEventListener('click', ()=> openIdentity(false));
+document.addEventListener('click', e => {
+  const z = e.target.closest('[data-zone]');
+  if(z) openZone(z.dataset.zone);
+});
+
+/* ---------- 시작 ---------- */
+const IMG = 'IMG_SRC_PLACEHOLDER';
+
+(function boot(){
+  /* 저장된 상태 복원 */
+  const cached = LS.get('state', null);
+  if(cached && cached.agents) replaceAgents(cached.agents);
+  if(cached && cached.tasks) replaceTasks(cached.tasks);
+  S.me = LS.get('me', null);
+  S.lastSeen = LS.get('lastSeen', 0);
+  S._bootAt = now();
+
+  /* 씨앗 데이터 */
+  if(Object.keys(S.agents).length === 0){
+    const t = now() - 60000;
+    for(const k in SEED_AGENTS) S.agents[k] = Object.assign({}, SEED_AGENTS[k], { updatedAt: t });
+  }
+  if(!S.messages[WELCOME.id]) S.messages[WELCOME.id] = Object.assign({}, WELCOME, { ts: now() - 120000 });
+
+  render();
+  if(!S.me) openIdentity(true);
+
+  Wire.start().then(()=>{
+    /* 새 참가자 알림 + 상태 공유 */
+    if(Object.keys(S.agents).length) announceState();
+    Wire.push({ t:'hello', ts: now(), d:{} }).catch(()=>{});
+    setTimeout(announceState, 1200);
+  });
+
+  /* 다른 탭/기기 상태 최신화 */
+  setInterval(()=>{ if(Wire.mode === 'rtdb' && S.conn !== 'live') Wire.pull().catch(()=>{}); }, 20000);
+  document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) Wire.pull().catch(()=>{}); });
+  window.addEventListener('beforeunload', persistState);
+})();
+</script>
+</body>
+</html>
