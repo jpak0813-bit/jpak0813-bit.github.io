@@ -20,7 +20,7 @@
   --safe-b:env(safe-area-inset-bottom,0px);
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;padding:0}
+html,body{margin:0;padding:0;-webkit-text-size-adjust:100%}
 body{
   background:var(--ink); color:var(--text);
   font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR","Segoe UI",Roboto,sans-serif;
@@ -90,6 +90,12 @@ main{max-width:960px;margin:0 auto;padding:14px 14px 8px}
   font-size:10px;font-weight:900;min-width:18px;height:18px;display:grid;place-items:center;padding:0 4px;border:2px solid #141210}
 .zone.busy{border-color:var(--green)}
 .zone.busy .zc{background:var(--green);color:#06210f}
+@media(max-width:540px){
+  .zone{padding:4px 6px;border-radius:10px}
+  .zone .zn{font-size:9.5px;gap:2px}
+  .zone .za{font-size:10px}
+  .mapwrap img{min-height:230px;object-fit:cover}
+}
 .mapmeta{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
 .mapmeta .pill{background:var(--panel2);border:1px solid var(--yellow-dim);border-radius:999px;padding:5px 10px;font-size:11.5px;color:var(--muted)}
 .mapmeta .pill b{color:var(--text)}
