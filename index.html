@@ -406,6 +406,7 @@ const Wire = {
       const r = await fetch(this.url('') + '?t=' + now());
       if(!r.ok) throw new Error('rtdb ' + r.status);
       mergeSnapshot(await r.json());
+      render(); persistState();
       return;
     }
     /* ntfy 캐시 재생 */
@@ -415,6 +416,7 @@ const Wire = {
     txt.split('\n').filter(Boolean).forEach(line => {
       try{ const n = JSON.parse(line); if(n.event === 'message' && n.message) applyEnvelope(JSON.parse(n.message)); }catch(e){}
     });
+    render(); persistState();
   },
   stream(){
     if(this.mode === 'rtdb'){
