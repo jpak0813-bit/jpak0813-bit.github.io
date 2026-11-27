@@ -1205,6 +1205,11 @@ function fakeFirebase() {
       toastEl.classList.contains('on') && toastEl.textContent.includes('Cue') && toastEl.textContent.includes('식사중'), toastEl.textContent);
     ok('map: 누른 캐릭터가 잠깐 강조(sel)', d.querySelector('.actor[data-agent="cue"]').classList.contains('sel'));
 
+    d.querySelector('.actor[data-agent="roen"]').click();
+    await wait(40);
+    ok('map: 대기 캐릭터 토스트는 지금 있는 곳(라운지)을 알려줌',
+      d.querySelector('#toast').textContent.includes('라운지에서 휴식'), d.querySelector('#toast').textContent);
+
     const zkeys = w.eval('Object.keys(ZONES).join(",")');
     ok('map: 구역 내부 키는 그대로(office/work/yard/break)', zkeys === 'office,work,yard,break', zkeys);
     const mapText = d.querySelector('#view-map').textContent;

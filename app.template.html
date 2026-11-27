@@ -950,6 +950,16 @@ function renderBadge(){
   else b.style.display = 'none';
 }
 function agentsIn(zone){ return Object.values(S.agents).filter(a => a.zone === zone); }
+/* 상태별로 지금 어디서 무엇을 하는지 — 지도 캐릭터 툴팁·토스트·상태판이 같은 문구를 씁니다. */
+function whereLabel(a){
+  const st = a.status;
+  if(st === '작업중')  return (ZONES[a.zone] || ZONES.work).name + '에서 작업';
+  if(st === '무전대기') return (ZONES[a.zone] || ZONES.office).name + ' · 무전 대기';
+  if(st === '식사중')   return '라운지에서 식사';
+  if(st === '합류대기') return '라운지 입구에서 대기';
+  if(st === '외근')     return '외근 중';
+  return '라운지에서 휴식';
+}
 
 function renderMap(){
   const el = $('#view-map');
@@ -966,26 +976,26 @@ function renderMap(){
     const st = a.status;
     if(st === '작업중'){
       const zk = ZONES[a.zone] ? a.zone : 'work', p = seat('w:' + zk, ZONES[zk].spots);
-      return { zone: zk, state: 'working', badge: '⚡', x: p.x, y: p.y, where: ZONES[zk].name + '에서 작업' };
+      return { zone: zk, state: 'working', badge: '⚡', x: p.x, y: p.y, where: whereLabel(a) };
     }
     if(st === '무전대기'){
       const zk = ZONES[a.zone] ? a.zone : 'office', p = seat('r:' + zk, ZONES[zk].spots);
-      return { zone: zk, state: 'radio', badge: '📻', x: p.x, y: p.y, where: ZONES[zk].name + ' · 무전 대기' };
+      return { zone: zk, state: 'radio', badge: '📻', x: p.x, y: p.y, where: whereLabel(a) };
     }
     if(st === '식사중'){
       const p = seat('eat', LOUNGE_SEATS);
-      return { zone: 'break', state: 'eating', badge: '🍽️', x: p.x, y: p.y, where: '라운지에서 식사' };
+      return { zone: 'break', state: 'eating', badge: '🍽️', x: p.x, y: p.y, where: whereLabel(a) };
     }
     if(st === '합류대기'){
       const p = seat('door', LOUNGE_DOOR);
-      return { zone: 'break', state: 'joining', badge: '🙋', x: p.x, y: p.y, where: '라운지 입구에서 대기' };
+      return { zone: 'break', state: 'joining', badge: '🙋', x: p.x, y: p.y, where: whereLabel(a) };
     }
     if(st === '외근'){
       const p = seat('away', LOUNGE_DOOR);
-      return { zone: 'break', state: 'away', badge: '🚶', x: p.x, y: p.y, where: '외근 중' };
+      return { zone: 'break', state: 'away', badge: '🚶', x: p.x, y: p.y, where: whereLabel(a) };
     }
     const p = seat('lounge', LOUNGE_SEATS);
-    return { zone: 'break', state: 'idle', badge: p.i % 2 ? '💤' : '☕', x: p.x, y: p.y, where: '라운지에서 휴식' };
+    return { zone: 'break', state: 'idle', badge: p.i % 2 ? '💤' : '☕', x: p.x, y: p.y, where: whereLabel(a) };
   }
   const poses = {};
   agents.forEach(a => { poses[a.id] = poseOf(a); });
@@ -2267,8 +2277,7 @@ function tapActor(id, el){
   const a = S.agents[id];
   if(!a) return;
   if(el){ el.classList.add('sel'); setTimeout(()=> el.classList.remove('sel'), 1400); }
-  const zname = ZONES[a.zone] ? ZONES[a.zone].name : '미배치';
-  toast((a.emoji || '🙂') + ' ' + a.name + ' · ' + a.status + ' · ' + zname);
+  toast((a.emoji || '🙂') + ' ' + a.name + ' · ' + a.status + ' · ' + whereLabel(a));
 }
 document.addEventListener('click', e => {
   const ac = e.target.closest('[data-agent]');
