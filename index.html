@@ -318,6 +318,8 @@ const LS = {
 };
 function persistState(){
   LS.set('state', { agents:S.agents, tasks:S.tasks, at: now() });
+  const msgs = Object.values(S.messages).sort((a,b)=>(a.ts||0)-(b.ts||0)).slice(-300);
+  LS.set('msgs', { list: msgs, at: now() });
 }
 
 /* ---------- 상태 반영 ---------- */
@@ -719,6 +721,7 @@ function renderCrew(){
     + '<div class="sec-title">👷 인력 현황 <span class="tiny muted" style="font-weight:600">' + agents.length + '명 출근</span><span class="line"></span></div>'
     + '<div class="crew">' + (cards || '<div class="empty">인력이 없습니다.</div>') + '</div>'
     + '<button class="btn ghost" id="addAgentBtn" style="width:100%;margin-top:10px">＋ 인력 · 봇 추가</button>'
+    + '<button class="btn ghost" id="shareBtn" style="width:100%;margin-top:8px">🔗 현장 초대 링크 복사</button>'
     + '<details class="help"><summary>🔌 외부 봇(제미나이·Cue 등) 연결 방법</summary>'
     +   '<div class="body">'
     +     '<div>현재 채널: <b>' + (Wire.mode === 'rtdb' ? 'Firebase RTDB' : '임시 ntfy 중계') + '</b></div>'
@@ -730,6 +733,11 @@ function renderCrew(){
     + '</details>';
 
   $('#addAgentBtn').addEventListener('click', openAddAgent);
+  $('#shareBtn').addEventListener('click', async ()=>{
+    const url = location.origin + location.pathname + '?room=' + encodeURIComponent(CFG.room);
+    try{ await navigator.clipboard.writeText(url); toast('초대 링크를 복사했습니다'); }
+    catch(e){ toast(url); }
+  });
   el.querySelectorAll('[data-astatus]').forEach(s => s.addEventListener('change', ()=>{
     const a = S.agents[s.dataset.astatus]; if(!a) return;
     upsertAgent(Object.assign({}, a, { status: s.value }));
@@ -827,7 +835,7 @@ function switchTab(t){
   if(t === 'chat'){ S.unread = 0; S.lastSeen = now(); LS.set('lastSeen', S.lastSeen); }
   render();
   if(t === 'chat') setTimeout(scrollChatBottom, 40);
-  window.scrollTo({ top:0, behavior:'instant' in window ? 'instant' : 'auto' });
+  window.scrollTo(0, 0);
 }
 document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', ()=> switchTab(b.dataset.tab)));
 $('#meBtn').addEventListener('click', ()=> openIdentity(false));
@@ -844,6 +852,8 @@ const IMG = 'data:image/webp;base64,UklGRiAnAgBXRUJQVlA4IBQnAgAQMgmdASp4BaUDPmEs
   const cached = LS.get('state', null);
   if(cached && cached.agents) replaceAgents(cached.agents);
   if(cached && cached.tasks) replaceTasks(cached.tasks);
+  const cachedMsgs = LS.get('msgs', null);
+  if(cachedMsgs && Array.isArray(cachedMsgs.list)) cachedMsgs.list.forEach(m => { if(m && m.id && !S.messages[m.id]) S.messages[m.id] = m; });
   S.me = LS.get('me', null);
   S.lastSeen = LS.get('lastSeen', 0);
   S._bootAt = now();

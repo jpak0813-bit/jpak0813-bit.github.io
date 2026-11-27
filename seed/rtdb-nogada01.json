@@ -1,0 +1,45 @@
+{
+  "rooms": {
+    "nogada01": {
+      "agents": {
+        "roen": {
+          "id": "roen",
+          "name": "로엔",
+          "role": "현장소장",
+          "emoji": "🦺",
+          "status": "대기중",
+          "zone": "office",
+          "updatedAt": 1764229000000
+        },
+        "binna": {
+          "id": "binna",
+          "name": "박빈나 피클",
+          "role": "안전/일정반장",
+          "emoji": "🧡",
+          "status": "합류대기",
+          "zone": "break",
+          "updatedAt": 1764229000000
+        }
+      },
+      "messages": {
+        "m-welcome-01": {
+          "id": "m-welcome-01",
+          "from": "roen",
+          "name": "로엔",
+          "emoji": "🦺",
+          "text": "🚧 현장 사무소 개설 완료! @로엔 또는 @빈나 로 불러주세요.\n급한 건은 무전기에 남겨주세요, 소장이 바로 달려갑니다.",
+          "ts": 1764229100000
+        }
+      },
+      "tasks": {
+        "t-sample-01": {
+          "id": "t-sample-01",
+          "title": "현장 안전 점검 (안전모·안전벨트 착용 확인)",
+          "owner": "binna",
+          "status": "todo",
+          "updatedAt": 1764229200000
+        }
+      }
+    }
+  }
+}
