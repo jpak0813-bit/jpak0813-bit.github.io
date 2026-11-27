@@ -1319,8 +1319,8 @@ function fakeFirebase() {
     const after = w.eval("({x:S.roam.roen.x, y:S.roam.roen.y, walk:S.roam.roen.walkingUntil})");
     ok('roam: 때가 되면 라운지의 새 자리로 출발', (after.x !== before.x || after.y !== before.y), JSON.stringify(after));
     ok('roam: 걷는 동안 walking 클래스', roen.classList.contains('walking') && roen.dataset.state === 'walking', roen.className);
-    ok('roam: 새 자리는 라운지 범위 안(51~92% / 54~86%)',
-      after.x >= 51 && after.x <= 92 && after.y >= 54 && after.y <= 86, after.x + ',' + after.y);
+    ok('roam: 새 자리는 라운지 범위 안(54~88% / 56~78%)',
+      after.x >= 54 && after.x <= 88 && after.y >= 56 && after.y <= 78, after.x + ',' + after.y);
     ok('roam: 다음 출발은 5~7초 뒤', w.eval("S.roam.roen.nextAt - Date.now()") > 4000
       && w.eval("S.roam.roen.nextAt - Date.now()") < 8000);
 

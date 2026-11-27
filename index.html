@@ -890,7 +890,7 @@ const S = { agents:{}, tasks:{}, messages:{}, me:null, conn:'connecting', tab:'m
    대기중 캐릭터는 5~7초마다 라운지 안의 다른 자리로 천천히 걸어갑니다(사람마다 시각이 어긋남).
    작업중이 되면 바로 멈추고 자기 책상으로 미끄러져 갑니다(0.8초).
    prefers-reduced-motion 이면 아예 움직이지 않습니다. */
-const ROAM = { minX: 51, maxX: 92, minY: 54, maxY: 86, minGap: 15, walkMs: 1400, minWait: 5200, maxWait: 7400 };
+const ROAM = { minX: 54, maxX: 88, minY: 56, maxY: 78, minGap: 15, walkMs: 1400, minWait: 5200, maxWait: 7400 };
 const REDUCED_MOTION = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 function ensureRoam(id, x, y){
   if(REDUCED_MOTION) return null;
