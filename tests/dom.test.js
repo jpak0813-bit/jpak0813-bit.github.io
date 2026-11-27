@@ -1080,7 +1080,7 @@ function fakeFirebase() {
   /* ============ 6b) Google 로그인 게이트 (RTDB 모드) ============ */
   {
     const fb = fakeFirebase();
-    const { dom, d, fbCalls } = boot({ url: 'https://example.test/?room=nogada01', firebase: fb });
+    const { dom, d, fbCalls, copied } = boot({ url: 'https://example.test/?room=nogada01', firebase: fb });
     await wait(120);
     ok('auth: 로그인 전 게이트 표시', !d.querySelector('#authGate').hidden);
     ok('auth: Google 로그인 버튼', !!d.querySelector('#agSignIn'));
@@ -1102,6 +1102,11 @@ function fakeFirebase() {
     ok('auth: 인력 현황에 계정 카드', d.querySelector('#view-crew').textContent.includes('현장주 계정'));
     ok('auth: 로그아웃 버튼', !!d.querySelector('#authOutBtn'));
     ok('auth: 현장주에게만 허용 이메일 추가칸', !!d.querySelector('#allowEmail'));
+
+    d.querySelector('#cueCopyBtn').click();
+    await wait(60);
+    ok('auth: Cue 문구에 로그인 토큰 포함', String(copied[0] || '').includes('auth=test-id-token'));
+    ok('auth: Cue 문구에 토큰 만료 안내', String(copied[0] || '').includes('401'));
 
     d.querySelector('#authOutBtn').click();
     await wait(100);

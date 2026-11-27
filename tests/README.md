@@ -27,6 +27,7 @@ npm test
   - 400 `reasoning_effort` 거절 → 같은 모델을 파라미터 없이 재시도 / `@groq` 영문 멘션도 동작
 - 제미나이 키 설정 시트: `AIza…` 와 `AQ.…` 두 키 형식을 모두 안내
 - 모바일 레이아웃(CSS 계약): body `100dvh` 앱 셸 · main 스크롤 · 무전기 탭/카드가 남는 높이 채움 · 하단 탭바가 fixed가 아니라 흐름의 마지막(안전영역 포함)
-- `@Cue`: 인력 카드 · 복사 문구에 Firebase `GET/POST .../messages.json` 주소와 `from:"cue", name:"Cue", emoji:"🕶️"` 규칙이 들어 있는지
+- `@Cue`: 인력 카드 · 복사 문구에 Firebase `GET/POST .../messages.json` 주소와 `from:"cue", name:"Cue", emoji:"🕶️"` 규칙이 들어 있는지 · 로그인 상태면 `?auth=<ID 토큰>`이 붙는지
+- 🔐 Google 로그인(가짜 Firebase Auth 주입): 로그인 전 게이트·RTDB 호출 0건 · 로그인 후 게이트 해제·`?auth=` 토큰 전달·헤더 계정 표시 · 인력 현황 접근 권한 카드·로그아웃 · 현장주에게만 허용 이메일 추가칸 · 401(권한 없는 계정) → 게이트 + 사유·계정 표시
 
 테스트는 실제 Firebase에 쓰지 않습니다(`?db=off` 또는 가짜 fetch). 실서비스 확인은 배포 후 사이트에서 직접 하세요.
