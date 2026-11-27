@@ -13,7 +13,9 @@
           }
         },
         "messages": {
-          ".write": "auth != null && auth.token.email_verified == true && (auth.token.email == 'jpak0813@gmail.com' || root.child('rooms').child($room).child('allowedEmails').child(auth.token.email.replace('.', ',')).val() == true)"
+          "$messageId": {
+            ".write": "auth != null && auth.token.email_verified == true && (auth.token.email == 'jpak0813@gmail.com' || root.child('rooms').child($room).child('allowedEmails').child(auth.token.email.replace('.', ',')).val() == true) && ((data.child('from').val() != 'jingyu' && newData.child('from').val() != 'jingyu') || auth.uid == 'fY3Iqsa3GDdbpLM3WozAN9Yxuli2')"
+          }
         },
         "agents": {
           ".write": "auth != null && auth.token.email_verified == true && (auth.token.email == 'jpak0813@gmail.com' || root.child('rooms').child($room).child('allowedEmails').child(auth.token.email.replace('.', ',')).val() == true)"
