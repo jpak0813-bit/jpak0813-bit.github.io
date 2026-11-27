@@ -14,6 +14,7 @@ const path = require('path');
 const HTML = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 const FAKE_KEY = 'AIzaSyTESTKEY_do_not_leak_1234567890';
 const FAKE_GROQ_KEY = 'gsk_TESTKEY_do_not_leak_1234567890abcdef';
+const FAKE_TAVILY_KEY = 'tvly-TESTKEY-do-not-leak-1234567890';
 const FB = 'https://pickle-nogada-office-default-rtdb.asia-southeast1.firebasedatabase.app';
 
 const wait = ms => new Promise(r => setTimeout(r, ms));
@@ -24,6 +25,7 @@ function boot(opts = {}) {
   const published = [];       // 앱이 밖으로 내보낸 모든 페이로드(ntfy/Firebase)
   const geminiCalls = [];     // Gemini API 호출 기록
   const groqCalls = [];       // Groq API 호출 기록
+  const tavilyCalls = [];     // Tavily Search API 호출 기록
   const copied = [];
   const geminiResponder = opts.geminiResponder || (() => ({
     ok: true, status: 200,
@@ -32,6 +34,19 @@ function boot(opts = {}) {
   const groqResponder = opts.groqResponder || (() => ({
     ok: true, status: 200,
     json: async () => ({ choices: [{ index: 0, message: { role: 'assistant', content: '거푸집은 위에서부터 한 단씩 내려오면 됩니다. 안전대 먼저 겁니다.' }, finish_reason: 'stop' }] })
+  }));
+  const tavilyResponder = opts.tavilyResponder || (() => ({
+    ok: true, status: 200,
+    json: async () => ({
+      query: '서울 날씨',
+      answer: '오늘 서울은 맑고 낮 최고 13도입니다.',
+      results: [
+        { title: '기상청 날씨누리', url: 'https://www.weather.go.kr/main', content: '서울 낮 최고 13도, 밤 최저 2도.' },
+        { title: '연합뉴스', url: 'https://www.yna.co.kr/view/1', content: '수도권 맑음, 미세먼지 보통.' },
+        { title: '세 번째 출처', url: 'https://example.com/x', content: '세 번째 결과' }
+      ],
+      response_time: '0.8'
+    })
   }));
 
   const dom = new JSDOM(HTML, {
@@ -45,6 +60,11 @@ function boot(opts = {}) {
           const call = { url: u, body: opt.body ? JSON.parse(opt.body) : null };
           geminiCalls.push(call);
           return geminiResponder(call, geminiCalls.length);
+        }
+        if (u.includes('api.tavily.com')) {
+          const call = { url: u, headers: opt.headers || {}, body: opt.body ? JSON.parse(opt.body) : null, signal: opt.signal };
+          tavilyCalls.push(call);
+          return tavilyResponder(call, tavilyCalls.length);
         }
         if (u.includes('api.groq.com')) {
           const call = { url: u, headers: opt.headers || {}, body: opt.body ? JSON.parse(opt.body) : null };
@@ -73,7 +93,7 @@ function boot(opts = {}) {
       });
     }
   });
-  return { dom, w: dom.window, d: dom.window.document, published, geminiCalls, groqCalls, copied };
+  return { dom, w: dom.window, d: dom.window.document, published, geminiCalls, groqCalls, tavilyCalls, copied };
 }
 
 (async () => {
@@ -555,6 +575,7 @@ function boot(opts = {}) {
     ok('groq: 첫 모델 openai/gpt-oss-120b', call.body.model === 'openai/gpt-oss-120b', call.body.model);
     ok('groq: stream false', call.body.stream === false);
     ok('groq: max_completion_tokens', typeof call.body.max_completion_tokens === 'number' && call.body.max_completion_tokens > 0);
+    ok('groq: max_completion_tokens 4096 (긴 답이 잘리지 않게)', call.body.max_completion_tokens === 4096, String(call.body.max_completion_tokens));
     ok('groq: temperature', typeof call.body.temperature === 'number');
     ok('groq: gpt-oss reasoning_effort low', call.body.reasoning_effort === 'low', String(call.body.reasoning_effort));
     const sysMsg = (call.body.messages || [])[0] || {};
@@ -725,6 +746,280 @@ function boot(opts = {}) {
     ok('groq 영문 멘션: 호출됨', groqCalls.length === 1, 'calls=' + groqCalls.length);
     const reply = published.filter(p => p.t === 'msg' && p.d.from === 'groq').pop();
     ok('groq 영문 멘션: 답장', !!reply && reply.d.name === '그록', (reply && reply.d.name) || 'none');
+    dom.window.close();
+  }
+
+  /* ============ 5-J) Tavily 검색 키 UI · localStorage 저장 · 마스킹 · 유출 금지 ============ */
+  {
+    const { dom, w, d, published } = boot();
+    await wait(160);
+    d.querySelector('[data-me="jingyu"]').click();
+    await wait(30);
+    d.querySelector('.tab[data-tab="crew"]').click();
+    await wait(40);
+    const crew = d.querySelector('#view-crew').textContent;
+    ok('tavily crew: 카드', crew.includes('Tavily 실시간 검색'));
+    ok('tavily crew: 미설정 · 월 1,000건 무료', crew.includes('미설정 · 월 1,000건 무료'));
+    const btn = d.querySelector('#tavilyKeyBtn');
+    ok('tavily crew: 🔍 Tavily 검색 API 키 설정 버튼', !!btn && btn.textContent.includes('🔍 Tavily 검색 API 키 설정'), btn && btn.textContent);
+    btn.click();
+    await wait(30);
+    const sheet = d.querySelector('#sheet').textContent;
+    ok('tavily sheet: 열림', d.querySelector('#overlay').classList.contains('on') && sheet.includes('Tavily 검색 API 키'));
+    ok('tavily sheet: tvly- 키 안내', sheet.includes('tvly-'));
+    ok('tavily sheet: app.tavily.com/home 링크', !!d.querySelector('#sheet a[href="https://app.tavily.com/home"]'));
+    ok('tavily sheet: 월 1,000건 무료 안내', sheet.includes('월 1,000건'));
+    ok('tavily sheet: 저장·테스트 버튼', !!d.querySelector('#tvSave') && !!d.querySelector('#tvTest'));
+    ok('tavily sheet: 키 없을 땐 삭제 버튼 없음', !d.querySelector('#tvDel'));
+
+    d.querySelector('#tvInput').value = FAKE_TAVILY_KEY;
+    d.querySelector('#tvSave').click();
+    await wait(70);
+    ok('tavily key saved to localStorage(nogada_tavily_key)', w.localStorage.getItem('nogada_tavily_key') === FAKE_TAVILY_KEY,
+      String(w.localStorage.getItem('nogada_tavily_key')));
+    const crew2 = d.querySelector('#view-crew').textContent;
+    ok('tavily crew: 웹 검색 연결됨', crew2.includes('웹 검색 연결됨'));
+    ok('tavily key masked in UI', crew2.includes('tvly-T…7890'), crew2.slice(0, 40));
+    ok('tavily key NOT in any outgoing payload', !JSON.stringify(published).includes(FAKE_TAVILY_KEY));
+    ok('tavily key NOT in page source(HTML)', !HTML.includes(FAKE_TAVILY_KEY));
+
+    d.querySelector('#tavilyKeyBtn').click();
+    await wait(30);
+    ok('tavily sheet: 키 있을 때 삭제 버튼', !!d.querySelector('#tvDel'));
+    d.querySelector('#tvDel').click();
+    await wait(70);
+    ok('tavily key cleared', !w.localStorage.getItem('nogada_tavily_key'));
+    ok('tavily crew: 미설정으로 복귀', d.querySelector('#view-crew').textContent.includes('미설정'));
+    dom.window.close();
+  }
+
+  /* ============ 5-K) 검색 → 프롬프트 주입 → 🔎 출처 표기 ============ */
+  {
+    const { dom, w, d, published, groqCalls, tavilyCalls } = boot({
+      tavilyResponder: () => ({ ok: true, status: 200, json: async () => ({
+        query: '오늘 서울 날씨 어때?',
+        answer: '오늘 서울은 맑고 낮 최고 13도입니다.',
+        results: [
+          { title: '기상청 날씨누리', url: 'https://www.weather.go.kr/main', content: '서울 낮 최고 13도, 밤 최저 2도.' },
+          { title: '연합뉴스', url: 'https://www.yna.co.kr/view/1', content: '수도권 맑음, 미세먼지 보통.' },
+          { title: '세 번째 출처', url: 'https://example.com/3', content: '세 번째 결과' },
+          { title: '네 번째 출처', url: 'https://example.com/4', content: '네 번째 결과' },
+          { title: '다섯 번째 출처', url: 'https://example.com/5', content: '다섯 번째 결과' }
+        ]
+      }) })
+    });
+    await wait(160);
+    d.querySelector('[data-me="jingyu"]').click();
+    await wait(30);
+    w.localStorage.setItem('nogada_groq_key', FAKE_GROQ_KEY);
+    w.localStorage.setItem('nogada_tavily_key', FAKE_TAVILY_KEY);
+    d.querySelector('.tab[data-tab="chat"]').click();
+    await wait(30);
+    d.querySelector('#msgInput').value = '@그록 오늘 서울 날씨 어때?';
+    d.querySelector('#sendBtn').click();
+    await wait(900);
+
+    ok('tavily: 검색 1회 호출', tavilyCalls.length === 1, 'calls=' + tavilyCalls.length);
+    const tc = tavilyCalls[0] || { url: '', headers: {}, body: {} };
+    ok('tavily: endpoint', tc.url === 'https://api.tavily.com/search', tc.url);
+    ok('tavily: Bearer 키 헤더', tc.headers.Authorization === 'Bearer ' + FAKE_TAVILY_KEY);
+    ok('tavily: query는 멘션 제거한 질문', tc.body.query === '오늘 서울 날씨 어때?', tc.body.query);
+    ok('tavily: search_depth basic', tc.body.search_depth === 'basic');
+    ok('tavily: max_results 4', tc.body.max_results === 4, String(tc.body.max_results));
+    ok('tavily: include_answer true', tc.body.include_answer === true);
+    ok('tavily: api_key 본문 포함', tc.body.api_key === FAKE_TAVILY_KEY);
+
+    const call = groqCalls[0] || { body: { messages: [] } };
+    const sys = String((call.body.messages || [])[0].content || '');
+    const user = String((call.body.messages || [])[1].content || '');
+    ok('groq: max_completion_tokens 4096', call.body.max_completion_tokens === 4096, String(call.body.max_completion_tokens));
+    ok('persona(검색): 실시간 검색 결과를 근거로 쓰라는 지시', sys.includes('실시간 웹 검색 결과') && sys.includes('Tavily'));
+    ok('persona(검색): 🔎 출처 형식 지시', sys.includes('🔎 출처: 제목1 · 제목2'));
+    ok('persona(검색): 확인 필요 지시 유지', sys.includes('확인 필요'));
+    ok('prompt: [지금 시각] KST 포함', /\[지금 시각\][\s\S]*KST/.test(user), user.slice(0, 80));
+    ok('prompt: 오늘 날짜(YYYY-MM-DD) 포함', /\d{4}-\d{2}-\d{2} \([일월화수목금토]\) \d{2}:\d{2} KST/.test(user));
+    ok('prompt: 검색 요약 주입', user.includes('낮 최고 13도'));
+    ok('prompt: 상위 결과 제목·URL 주입', user.includes('기상청 날씨누리') && user.includes('https://www.weather.go.kr/main'));
+    ok('prompt: max_results(4) 초과 결과는 주입 안 함', !user.includes('다섯 번째 출처'));
+
+    const reply = published.filter(p => p.t === 'msg' && p.d.from === 'groq').pop();
+    ok('답장 게시', !!reply && reply.d.error !== true);
+    ok('답장: 🔎 출처 제목 2개', !!reply && reply.d.text.includes('🔎 출처: 기상청 날씨누리 · 연합뉴스'), reply && reply.d.text);
+    ok('답장: 본문 유지', !!reply && reply.d.text.includes('거푸집은 위에서부터'));
+    ok('답장: live 표시', !!reply && reply.d.live === true);
+    ok('tavily 키가 아웃바운드에 없음', !JSON.stringify(published).includes(FAKE_TAVILY_KEY));
+    ok('groq 키가 아웃바운드에 없음', !JSON.stringify(published).includes(FAKE_GROQ_KEY));
+    ok('상태 복귀', w.eval('S.groqBusy') === false);
+    dom.window.close();
+  }
+
+  /* ============ 5-K-2) 그록이 이미 출처를 붙였으면 중복하지 않음 ============ */
+  {
+    const { dom, w, d, published } = boot({
+      groqResponder: () => ({ ok: true, status: 200, json: async () => ({
+        choices: [{ message: { role: 'assistant', content: '서울은 맑고 13도입니다.\n🔎 출처: 기상청' }, finish_reason: 'stop' }] }) })
+    });
+    await wait(160);
+    d.querySelector('[data-me="jingyu"]').click();
+    await wait(30);
+    w.localStorage.setItem('nogada_groq_key', FAKE_GROQ_KEY);
+    w.localStorage.setItem('nogada_tavily_key', FAKE_TAVILY_KEY);
+    d.querySelector('.tab[data-tab="chat"]').click();
+    await wait(30);
+    d.querySelector('#msgInput').value = '@그록 오늘 날씨';
+    d.querySelector('#sendBtn').click();
+    await wait(800);
+    const reply = published.filter(p => p.t === 'msg' && p.d.from === 'groq').pop();
+    const cnt = reply ? (reply.d.text.match(/🔎 출처/g) || []).length : -1;
+    ok('출처 중복 없음(1회)', cnt === 1, 'count=' + cnt);
+    dom.window.close();
+  }
+
+  /* ============ 5-L) 인사·잡담에는 검색 생략(쿼터 절약) ============ */
+  {
+    const { dom, w, d, published, groqCalls, tavilyCalls } = boot();
+    await wait(160);
+    d.querySelector('[data-me="jingyu"]').click();
+    await wait(30);
+    w.localStorage.setItem('nogada_groq_key', FAKE_GROQ_KEY);
+    w.localStorage.setItem('nogada_tavily_key', FAKE_TAVILY_KEY);
+    d.querySelector('.tab[data-tab="chat"]').click();
+    await wait(30);
+    const ask = async (text) => {
+      d.querySelector('#msgInput').value = text;
+      d.querySelector('#sendBtn').click();
+      await wait(500);
+    };
+    await ask('@그록 안녕');
+    ok('잡담(안녕): Tavily 호출 안 함', tavilyCalls.length === 0, 'calls=' + tavilyCalls.length);
+    ok('잡담(안녕): 그록 답장', groqCalls.length === 1 && published.some(p => p.t === 'msg' && p.d.from === 'groq'));
+    const sys1 = String(groqCalls[0].body.messages[0].content || '');
+    ok('잡담: 검색 실패 안내 페르소나 아님', !sys1.includes('결과를 받지 못했다'));
+    ok('잡담: Tavily 키 없음 안내도 아님', !sys1.includes('키가 아직 없다'));
+
+    await ask('@그록 고마워');
+    ok('잡담(고마워): Tavily 호출 안 함', tavilyCalls.length === 0, 'calls=' + tavilyCalls.length);
+    await ask('@groq 테스트');
+    ok('잡담(테스트): Tavily 호출 안 함', tavilyCalls.length === 0, 'calls=' + tavilyCalls.length);
+
+    await ask('@그록 오늘 서울 날씨');
+    ok('질문: Tavily 호출함', tavilyCalls.length === 1, 'calls=' + tavilyCalls.length);
+    dom.window.close();
+  }
+
+  /* ============ 5-M) Tavily 실패(401·429·시간초과·망) → 검색 없이 그록이 답한다 ============ */
+  {
+    const keyErr = () => ({ ok: false, status: 401, json: async () => ({ detail: { error: 'Unauthorized: missing or invalid API key.' } }) });
+    const { dom, w, d, published, groqCalls, tavilyCalls } = boot({ tavilyResponder: keyErr });
+    await wait(160);
+    d.querySelector('[data-me="jingyu"]').click();
+    await wait(30);
+    w.localStorage.setItem('nogada_groq_key', FAKE_GROQ_KEY);
+    w.localStorage.setItem('nogada_tavily_key', 'tvly-BADKEY');
+    d.querySelector('.tab[data-tab="chat"]').click();
+    await wait(30);
+    d.querySelector('#msgInput').value = '@그록 오늘 서울 날씨';
+    d.querySelector('#sendBtn').click();
+    await wait(800);
+    ok('tavily 401: 검색은 시도', tavilyCalls.length === 1);
+    ok('tavily 401: 그록은 정상 호출', groqCalls.length === 1, 'calls=' + groqCalls.length);
+    const reply = published.filter(p => p.t === 'msg' && p.d.from === 'groq').pop();
+    ok('tavily 401: 답장 게시(오류 무전 아님)', !!reply && reply.d.error !== true && reply.d.text.includes('거푸집은'), reply && reply.d.text);
+    ok('tavily 401: 출처 없음', !!reply && !reply.d.text.includes('🔎 출처'));
+    ok('tavily 401: searchFailed 표시', !!reply && reply.d.searchFailed === true);
+    const sys = String(groqCalls[0].body.messages[0].content || '');
+    ok('tavily 401: 검색 실패 페르소나', sys.includes('결과를 받지 못했다'));
+    ok('tavily 401: 상태 복귀', w.eval('S.groqBusy') === false && w.eval("S.agents.groq.status") === '대기중');
+    ok('tavily 401: 키 유출 없음', !JSON.stringify(published).includes('tvly-BADKEY'));
+    dom.window.close();
+  }
+  {
+    const { dom, w, d, published, groqCalls } = boot({
+      tavilyResponder: () => ({ ok: false, status: 429, json: async () => ({ detail: { error: 'Rate limit exceeded' } }) })
+    });
+    await wait(160);
+    d.querySelector('[data-me="jingyu"]').click();
+    await wait(30);
+    w.localStorage.setItem('nogada_groq_key', FAKE_GROQ_KEY);
+    w.localStorage.setItem('nogada_tavily_key', FAKE_TAVILY_KEY);
+    d.querySelector('.tab[data-tab="chat"]').click();
+    await wait(30);
+    d.querySelector('#msgInput').value = '@그록 오늘 환율 알려줘';
+    d.querySelector('#sendBtn').click();
+    await wait(800);
+    const reply = published.filter(p => p.t === 'msg' && p.d.from === 'groq').pop();
+    ok('tavily 429: 그록이 계속 답함', groqCalls.length === 1 && !!reply && reply.d.error !== true);
+    ok('tavily 429: searchFailed 표시', !!reply && reply.d.searchFailed === true);
+    dom.window.close();
+  }
+  {
+    const { dom, w, d, published, groqCalls, tavilyCalls } = boot({
+      tavilyResponder: (call) => new Promise((resolve, reject) => {   /* 응답 없음 → 타임아웃 abort 경로 */
+        const sig = call.signal;
+        if (!sig) return;
+        if (typeof sig.addEventListener === 'function') sig.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })));
+        else sig.onabort = () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+      })
+    });
+    await wait(160);
+    d.querySelector('[data-me="jingyu"]').click();
+    await wait(30);
+    w.localStorage.setItem('nogada_groq_key', FAKE_GROQ_KEY);
+    w.localStorage.setItem('nogada_tavily_key', FAKE_TAVILY_KEY);
+    w.eval('S.tavilyTimeoutMs = 120');
+    d.querySelector('.tab[data-tab="chat"]').click();
+    await wait(30);
+    d.querySelector('#msgInput').value = '@그록 오늘 서울 날씨';
+    d.querySelector('#sendBtn').click();
+    await wait(1000);
+    const reply = published.filter(p => p.t === 'msg' && p.d.from === 'groq').pop();
+    ok('tavily 지연: 검색은 시도', tavilyCalls.length === 1);
+    ok('tavily 지연: 그록 답장은 나감', groqCalls.length === 1 && !!reply && reply.d.error !== true, reply && reply.d.text);
+    ok('tavily 지연: searchFailed·출처 없음', !!reply && reply.d.searchFailed === true && !reply.d.text.includes('🔎 출처'));
+    ok('tavily 지연: busy 해제', w.eval('S.groqBusy') === false);
+    dom.window.close();
+  }
+  {
+    const { dom, w, d, published, groqCalls } = boot({
+      tavilyResponder: () => { throw Object.assign(new Error('network down'), { name: 'TypeError' }); }
+    });
+    await wait(160);
+    d.querySelector('[data-me="jingyu"]').click();
+    await wait(30);
+    w.localStorage.setItem('nogada_groq_key', FAKE_GROQ_KEY);
+    w.localStorage.setItem('nogada_tavily_key', FAKE_TAVILY_KEY);
+    d.querySelector('.tab[data-tab="chat"]').click();
+    await wait(30);
+    d.querySelector('#msgInput').value = '@그록 오늘 뉴스';
+    d.querySelector('#sendBtn').click();
+    await wait(800);
+    const reply = published.filter(p => p.t === 'msg' && p.d.from === 'groq').pop();
+    ok('tavily 망오류: 그록 계속 답함', groqCalls.length === 1 && !!reply && reply.d.error !== true);
+    ok('tavily 망오류: 상태 복귀', w.eval('S.groqBusy') === false);
+    dom.window.close();
+  }
+
+  /* ============ 5-N) Tavily 키 없으면 검색 안 붙고 '키 넣으면' 안내 페르소나 ============ */
+  {
+    const { dom, w, d, published, groqCalls, tavilyCalls } = boot();
+    await wait(160);
+    d.querySelector('[data-me="jingyu"]').click();
+    await wait(30);
+    w.localStorage.setItem('nogada_groq_key', FAKE_GROQ_KEY);
+    d.querySelector('.tab[data-tab="chat"]').click();
+    await wait(30);
+    d.querySelector('#msgInput').value = '@그록 오늘 서울 날씨';
+    d.querySelector('#sendBtn').click();
+    await wait(700);
+    ok('tavily 없음: 검색 호출 0', tavilyCalls.length === 0);
+    const sys = String(groqCalls[0].body.messages[0].content || '');
+    const user = String(groqCalls[0].body.messages[1].content || '');
+    ok('tavily 없음: 확인 필요 지시', sys.includes('확인 필요'));
+    ok('tavily 없음: Tavily 키 안내 지시', sys.includes('Tavily') && sys.includes('키가 아직 없다'));
+    ok('tavily 없음: 프롬프트에 검색 블록 없음', !user.includes('[실시간 웹 검색 결과'));
+    ok('tavily 없음: 지금 시각은 여전히 주입', /\[지금 시각\][\s\S]*KST/.test(user));
+    const reply = published.filter(p => p.t === 'msg' && p.d.from === 'groq').pop();
+    ok('tavily 없음: 답장 정상·출처 없음', !!reply && reply.d.error !== true && !reply.d.text.includes('🔎 출처'));
     dom.window.close();
   }
 
