@@ -322,7 +322,12 @@ const LS = {
   get(k, d){ try{ const v = localStorage.getItem('nogada.'+k); return v ? JSON.parse(v) : d; }catch(e){ return d; } },
   set(k, v){ try{ localStorage.setItem('nogada.'+k, JSON.stringify(v)); }catch(e){} }
 };
+let persistT = null;
 function persistState(){
+  clearTimeout(persistT);
+  persistT = setTimeout(writeState, 400);
+}
+function writeState(){
   LS.set('state', { agents:S.agents, tasks:S.tasks, at: now() });
   const msgs = Object.values(S.messages).sort((a,b)=>(a.ts||0)-(b.ts||0)).slice(-300);
   LS.set('msgs', { list: msgs, at: now() });
@@ -884,7 +889,7 @@ const IMG = 'data:image/webp;base64,UklGRiAnAgBXRUJQVlA4IBQnAgAQMgmdASp4BaUDPmEs
   /* 다른 탭/기기 상태 최신화 */
   setInterval(()=>{ if(Wire.mode === 'rtdb' && S.conn !== 'live') Wire.pull().catch(()=>{}); }, 20000);
   document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) Wire.pull().catch(()=>{}); });
-  window.addEventListener('beforeunload', persistState);
+  window.addEventListener('beforeunload', writeState);
 })();
 </script>
 </body>
