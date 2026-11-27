@@ -890,7 +890,7 @@ const S = { agents:{}, tasks:{}, messages:{}, me:null, conn:'connecting', tab:'m
    대기중 캐릭터는 5~7초마다 라운지 안의 다른 자리로 천천히 걸어갑니다(사람마다 시각이 어긋남).
    작업중이 되면 바로 멈추고 자기 책상으로 미끄러져 갑니다(0.8초).
    prefers-reduced-motion 이면 아예 움직이지 않습니다. */
-const ROAM = { minX: 54, maxX: 88, minY: 56, maxY: 78, minGap: 15, walkMs: 1400, minWait: 5200, maxWait: 7400 };
+const ROAM = { minX: 54, maxX: 88, minY: 56, maxY: 78, walkMs: 1400, minWait: 5200, maxWait: 7400 };
 const REDUCED_MOTION = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 function ensureRoam(id, x, y){
   if(REDUCED_MOTION) return null;
@@ -901,19 +901,22 @@ function ensureRoam(id, x, y){
   return r;
 }
 function roamSpot(id){
-  let best = null, bestGap = -1;
-  for(let i = 0; i < 10; i++){
+  /* 다른 캐릭터와 이름표가 겹치지 않게 — 가로 17%·세로 13% 안에 들어오면 다시 고릅니다. */
+  let best = null, bestScore = -1;
+  for(let i = 0; i < 14; i++){
     const x = ROAM.minX + Math.random() * (ROAM.maxX - ROAM.minX);
     const y = ROAM.minY + Math.random() * (ROAM.maxY - ROAM.minY);
-    let gap = 999;
+    let score = 999, clash = false;
     Object.keys(S.roam).forEach(k => {
       if(k === id) return;
       const r = S.roam[k];
       if(!r) return;
-      gap = Math.min(gap, Math.sqrt(Math.pow(r.x - x, 2) + Math.pow(r.y - y, 2)));
+      const dx = Math.abs(r.x - x), dy = Math.abs(r.y - y);
+      if(dx < 17 && dy < 13) clash = true;
+      score = Math.min(score, Math.max(dx / 17, dy / 13));
     });
-    if(gap > bestGap){ bestGap = gap; best = { x: x, y: y }; }
-    if(gap >= ROAM.minGap) break;
+    if(score > bestScore){ bestScore = score; best = { x: x, y: y }; }
+    if(!clash) break;
   }
   return best;
 }
