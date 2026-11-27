@@ -1,0 +1,12 @@
+{
+  "name": "nogada-office-tests",
+  "private": true,
+  "version": "1.0.0",
+  "description": "노가다 현장 합동 비서실 DOM 테스트 (jsdom)",
+  "scripts": {
+    "test": "node dom.test.js"
+  },
+  "devDependencies": {
+    "jsdom": "^24.1.3"
+  }
+}

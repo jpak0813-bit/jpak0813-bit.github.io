@@ -169,6 +169,20 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
 .st-식사중{background:rgba(255,158,122,.18);color:#ff9e7a}
 .st-외근{background:rgba(201,167,255,.18);color:#c9a7ff}
 .st-합류대기{background:rgba(76,195,138,.16);color:var(--green)}
+.st-준비{background:rgba(76,195,138,.16);color:var(--green)}
+
+/* ---------- 제미나이(@제미나이) ---------- */
+.msg.ai .av{background:linear-gradient(180deg,#243049,#1a2131);border-color:rgba(124,198,254,.45)}
+.msg.ai .bubble{border-color:rgba(124,198,254,.32);background:linear-gradient(180deg,#1d2434,#19202c)}
+.msg.typing .bubble{color:var(--muted);border-style:dashed}
+.tagai{font-size:9px;font-weight:900;background:var(--blue);color:#06121e;border-radius:999px;padding:1px 5px;letter-spacing:.2px}
+.aibanner{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:rgba(124,198,254,.10);border:1px solid rgba(124,198,254,.38);
+  border-radius:12px;padding:9px 11px;font-size:12.5px;color:#cfe7ff;margin:2px 0 10px;line-height:1.45}
+.aibanner b{color:#fff}
+.aibanner .chip{background:rgba(124,198,254,.16);border-color:rgba(124,198,254,.45);padding:4px 9px;font-size:11.5px;color:#e6f3ff}
+.keybox{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;background:var(--ink2);
+  border:1px dashed var(--yellow-dim);border-radius:10px;padding:9px 11px;color:#d8cfbc;word-break:break-all}
+.aicard .stline{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:2px}
 
 /* ---------- 하단 탭 ---------- */
 nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:70;padding:6px 8px calc(6px + var(--safe-b));
@@ -280,14 +294,44 @@ const ME_OPTIONS = [
 
 const SEED_AGENTS = {
   roen:  { id:'roen',  name:'로엔', role:'현장소장', emoji:'🦺', status:'대기중', zone:'office' },
-  binna: { id:'binna', name:'박빈나 피클', role:'안전/일정반장', emoji:'🧡', status:'합류대기', zone:'break' }
+  binna: { id:'binna', name:'박빈나 피클', role:'안전/일정반장', emoji:'🧡', status:'합류대기', zone:'break' },
+  gemini:{ id:'gemini', name:'제미나이', role:'설계/기술 자문', emoji:'🤖', status:'대기중', zone:'work' },
+  cue:   { id:'cue',   name:'Cue', role:'외부 첩보반장', emoji:'🕶️', status:'대기중', zone:'yard' }
 };
 const WELCOME = {
   id:'m-welcome-01', from:'roen', name:'로엔', emoji:'🦺', sys:false,
-  text:'🚧 현장 사무소 개설 완료! @로엔 또는 @빈나 로 불러주세요.\n급한 건은 무전기에 남겨주세요, 소장이 바로 달려갑니다.', ts:0
+  text:'🚧 현장 사무소 개설 완료! @로엔 · @빈나 · @제미나이 · @Cue 로 불러주세요.\n급한 건은 무전기에 남겨주세요, 소장이 바로 달려갑니다.', ts:0
 };
 
-const S = { agents:{}, tasks:{}, messages:{}, me:null, conn:'connecting', tab:'map', unread:0, lastSeen:0 };
+/* ---------- 제미나이(@제미나이) 즉답 설정 ----------
+   API 키는 이 브라우저의 localStorage(nogada_gemini_api_key)에만 저장합니다.
+   소스 코드·GitHub·Firebase RTDB에는 절대 넣지 않습니다. */
+const GEMINI_KEY_LS = 'nogada_gemini_api_key';
+const GEMINI_MODELS = [
+  { id:'gemini-2.5-flash', thinking:true },
+  { id:'gemini-2.0-flash' },
+  { id:'gemini-flash-latest' }
+];
+const GEMINI_PERSONA = [
+  "너는 '노가다 현장 합동 비서실' 무전방에 상주하는 설계·기술 자문 '제미나이'다.",
+  "직책은 설계/기술 자문, 이모지는 🤖. 현장 사람들과 무전으로 짧게 주고받는다.",
+  "",
+  "말투:",
+  "- 결론부터. 첫 문장에 답을 준다.",
+  "- 시원한 현장 반장 말투로 존댓말(~습니다/~요). 인사말·사족·과한 겸손은 넣지 않는다.",
+  "- 보통 2~4문장, 길어도 400자 안쪽. 순서가 필요하면 짧은 줄바꿈 목록 3개까지.",
+  "- 상대는 현장 사장님·소장·반장이다. 필요하면 '사장님'이라고 부른다. 이모지는 0~1개.",
+  "- 공정·자재·안전·견적·도면·장비·일정 쪽은 실무적으로 답하고, 잡담도 받아준다.",
+  "",
+  "규칙:",
+  "- [최근 무전 기록]을 읽고 대명사와 맥락을 이어서 해석한다.",
+  "- 모르는 것과 확인이 필요한 것은 모른다고 말한다. 확인되지 않은 수치·규정·가격을 지어내지 않는다.",
+  "- 법규·안전 기준처럼 틀리면 위험한 내용은 '현장 확인 필요'를 분명히 붙인다.",
+  "- 마크다운 문법(**, #, 표)은 쓰지 않는다. 무전기에 글자 그대로 보이기 때문이다."
+].join('\n');
+
+const S = { agents:{}, tasks:{}, messages:{}, me:null, conn:'connecting', tab:'map', unread:0, lastSeen:0,
+            geminiBusy:false, geminiNoKeyHint:false };
 
 /* ---------- 유틸 ---------- */
 const $ = s => document.querySelector(s);
@@ -310,7 +354,7 @@ function ago(ts){
   return Math.floor(s/86400)+'일 전';
 }
 function mentionize(text){
-  return esc(text).replace(/@(로엔|빈나|박빈나 피클|사장님|게스트)/g, '<span class="mention">@$1</span>');
+  return esc(text).replace(/@(로엔|빈나|박빈나 피클|사장님|게스트|제미나이|gemini|cue)/gi, '<span class="mention">@$1</span>');
 }
 function toast(msg){
   const t = $('#toast'); t.textContent = msg; t.classList.add('on');
@@ -406,6 +450,7 @@ const Wire = {
       const r = await fetch(this.url('') + '?t=' + now());
       if(!r.ok) throw new Error('rtdb ' + r.status);
       mergeSnapshot(await r.json());
+      ensureCoreAgents();
       render(); persistState();
       return;
     }
@@ -497,6 +542,7 @@ function sendMessage(text){
   S.messages[m.id] = m;
   render(); persistState();
   Wire.push({ t:'msg', ts: m.ts, d: m }).catch(()=> toast('무전 실패 — 잠시 후 다시'));
+  if(/@\s*(제미나이|gemini)/i.test(text)) setTimeout(()=> askGemini(m), 150);
   setTimeout(scrollChatBottom, 30);
 }
 function upsertTask(t){
@@ -516,6 +562,18 @@ function upsertAgent(a){
 function removeAgent(id){
   delete S.agents[id]; render(); persistState();
   Wire.push({ t:'del-agent', ts: now(), d:{ id } }).catch(()=>{});
+}
+/* 제미나이·Cue는 어느 현장(방)에나 상주합니다. 명단에 없으면 다시 투입합니다. */
+const CORE_AGENTS = ['gemini', 'cue'];
+function ensureCoreAgents(){
+  let changed = false;
+  CORE_AGENTS.forEach(id => {
+    if(S.agents[id]) return;
+    const a = Object.assign({}, SEED_AGENTS[id], { updatedAt: now() });
+    S.agents[id] = a; changed = true;
+    Wire.push({ t:'agent', ts: a.updatedAt, d: a }).catch(()=>{});
+  });
+  if(changed){ render(); persistState(); }
 }
 
 /* ---------- 렌더 ---------- */
@@ -596,21 +654,33 @@ function renderChat(){
 
   const html = list.length ? list.map(m => {
     const mine = S.me && m.from === S.me.id;
-    return '<div class="msg' + (mine ? ' mine' : '') + '">'
+    const ai = m.ai || m.via === 'gemini' || m.from === 'gemini';
+    return '<div class="msg' + (mine ? ' mine' : '') + (ai ? ' ai' : '') + '">'
       + '<div class="av">' + (m.emoji || '💬') + '</div>'
       + '<div class="body">'
-      +   '<div class="who"><b>' + esc(m.name || '무명') + '</b><span>' + fmtTime(m.ts) + '</span></div>'
+      +   '<div class="who"><b>' + esc(m.name || '무명') + '</b>' + (ai ? '<span class="tagai">AI</span>' : '') + '<span>' + fmtTime(m.ts) + '</span></div>'
       +   '<div class="bubble">' + mentionize(m.text || '') + '</div>'
       + '</div></div>';
   }).join('') : '<div class="empty">아직 무전 기록이 없습니다.<br>아래에 첫 무전을 남겨보세요.</div>';
 
-  const chips = Array.from(new Set(Object.values(S.agents).map(a => a.name))).slice(0,6)
-    .map(n => '<button class="chip" data-mention="' + esc(n) + '">@' + esc(n) + '</button>').join('');
+  const typing = S.geminiBusy
+    ? '<div class="msg ai typing"><div class="av">🤖</div><div class="body">'
+      + '<div class="who"><b>제미나이</b><span class="tagai">AI</span></div>'
+      + '<div class="bubble">무전 받는 중…</div></div></div>'
+    : '';
+
+  const names = ['제미나이', 'Cue'];
+  Object.values(S.agents).forEach(a => {
+    if(a.name && names.indexOf(a.name) < 0) names.push(a.name);
+  });
+  const chips = names.slice(0, 8)
+    .map(n => '<button class="chip" data-mention="' + esc(n) + '">' + (n === '제미나이' || n === 'Cue' ? '🤖 ' : '') + '@' + esc(n) + '</button>').join('');
 
   el.innerHTML = ''
     + '<div class="card">'
     +   '<div class="sec-title">📻 무전기 <span class="tiny muted" style="font-weight:600">실시간</span><span class="line"></span></div>'
-    +   '<div class="chat-scroll" id="chatScroll">' + html + '</div>'
+    +   geminiBannerHtml()
+    +   '<div class="chat-scroll" id="chatScroll">' + html + typing + '</div>'
     +   '<div class="quick">' + chips
     +     '<button class="chip" data-quick="지금 어디야?">📍 위치 확인</button>'
     +     '<button class="chip" data-quick="자재 들어왔어?">🧱 자재 확인</button>'
@@ -635,6 +705,16 @@ function renderChat(){
   el.querySelectorAll('[data-quick]').forEach(b => b.addEventListener('click', ()=>{ inp.value = b.dataset.quick; inp.focus(); }));
 
   if(wasNear) scrollChatBottom();
+  const kb = $('#aiKeyFromChat');
+  if(kb) kb.addEventListener('click', openGeminiKey);
+}
+function geminiBannerHtml(){
+  if(!S.geminiNoKeyHint) return '';
+  const has = !!geminiKey();
+  return '<div class="aibanner">'
+    + (has ? '🔑 저장된 제미나이 키가 거부됐습니다.' : '🔑 아직 제미나이 API 키가 없습니다.')
+    + ' <b>@제미나이</b> 즉답을 쓰려면 키를 한 번만 넣어주세요 (이 브라우저에만 저장).'
+    + ' <button class="chip" id="aiKeyFromChat">키 넣기</button></div>';
 }
 function scrollChatBottom(){
   const sc = $('#chatScroll');
@@ -739,6 +819,8 @@ function renderCrew(){
   el.innerHTML = ''
     + '<div class="sec-title">👷 인력 현황 <span class="tiny muted" style="font-weight:600">' + agents.length + '명 출근</span><span class="line"></span></div>'
     + '<div class="crew">' + (cards || '<div class="empty">인력이 없습니다.</div>') + '</div>'
+    + geminiCardHtml()
+    + cueCardHtml()
     + '<button class="btn ghost" id="addAgentBtn" style="width:100%;margin-top:10px">＋ 인력 · 봇 추가</button>'
     + '<button class="btn ghost" id="shareBtn" style="width:100%;margin-top:8px">🔗 현장 초대 링크 복사</button>'
     + '<details class="help"><summary>🔌 외부 봇(제미나이·Cue 등) 연결 방법</summary>'
@@ -751,6 +833,9 @@ function renderCrew(){
     +   '</div>'
     + '</details>';
 
+  if($('#geminiKeyBtn')) $('#geminiKeyBtn').addEventListener('click', openGeminiKey);
+  if($('#cueCopyBtn')) $('#cueCopyBtn').addEventListener('click', ()=> copyText(cuePrompt(), '📋 Cue한테 시킬 문구를 복사했습니다'));
+  if($('#cueAddrBtn')) $('#cueAddrBtn').addEventListener('click', ()=> copyText(cuePrompt(), '무전 주소·문구를 복사했습니다'));
   $('#addAgentBtn').addEventListener('click', openAddAgent);
   $('#shareBtn').addEventListener('click', async ()=>{
     const url = location.origin + location.pathname + '?room=' + encodeURIComponent(CFG.room);
@@ -774,6 +859,267 @@ function renderCrew(){
     switchTab('chat');
     setTimeout(()=>{ const i = $('#msgInput'); if(i){ i.value = '@' + b.dataset.call + ' '; i.focus(); } }, 60);
   }));
+}
+
+/* =========================================================
+   제미나이(@제미나이) 즉답 · Cue(@Cue) 연동
+   - 키는 this 브라우저 localStorage 에만 저장(공개 코드·DB 금지)
+   ========================================================= */
+function geminiKey(){
+  try{ return (localStorage.getItem(GEMINI_KEY_LS) || '').trim(); }catch(e){ return ''; }
+}
+function geminiSetKey(v){
+  try{
+    if(v) localStorage.setItem(GEMINI_KEY_LS, String(v).trim());
+    else localStorage.removeItem(GEMINI_KEY_LS);
+  }catch(e){ toast('브라우저 저장이 막혀 있습니다'); }
+}
+function maskKey(k){ return k ? String(k).slice(0, 6) + '…' + String(k).slice(-4) : ''; }
+
+function geminiCardHtml(){
+  const key = geminiKey();
+  const st = S.geminiBusy
+    ? '<span class="statuspill st-작업중">답변 준비중</span>'
+    : '<span class="statuspill st-대기중">대기중</span>';
+  return '<div class="card aicard" style="margin-top:10px">'
+    + '<div class="sec-title">🤖 제미나이 즉답<span class="line"></span></div>'
+    + '<div class="tiny muted" style="margin-bottom:9px">무전기에 <b>@제미나이</b> 라고 부르면 설계/기술 자문으로 바로 답합니다.</div>'
+    + '<div class="stline">' + st
+    +   '<span class="statuspill ' + (key ? 'st-준비' : 'st-대기중') + '">' + (key ? '키 등록됨 · ' + esc(maskKey(key)) : '키 없음') + '</span></div>'
+    + '<button class="btn" id="geminiKeyBtn" style="width:100%;margin-top:10px">🔑 제미나이 API 키 설정</button>'
+    + '</div>';
+}
+
+function lastCueTs(){
+  let t = 0;
+  Object.values(S.messages).forEach(m => { if(m.from === 'cue' && (m.ts || 0) > t) t = m.ts; });
+  return t;
+}
+function cueCardHtml(){
+  const ts = lastCueTs();
+  return '<div class="card aicard" style="margin-top:10px">'
+    + '<div class="sec-title">🕶️ Cue 연동 <span class="tiny muted" style="font-weight:600">외부 첩보반장</span><span class="line"></span></div>'
+    + '<div class="tiny muted" style="margin-bottom:9px">Cue는 진규 님 Cue 앱에서 움직입니다. 아래 문구를 Cue에게 한 번 붙여넣으면 무전방을 읽고, <b>@Cue</b> 가 불릴 때 🕶️ Cue 이름으로 답을 올립니다.</div>'
+    + '<div class="stline">'
+    +   '<span class="statuspill ' + (ts ? 'st-준비' : 'st-대기중') + '">' + (ts ? '마지막 무전 ' + ago(ts) : '아직 무전 없음') + '</span>'
+    +   '<span class="statuspill st-대기중">' + (Wire.mode === 'rtdb' ? 'Firebase RTDB' : 'ntfy 중계') + '</span></div>'
+    + '<button class="btn" id="cueCopyBtn" style="width:100%;margin-top:10px">📋 Cue한테 시킬 문구 복사</button>'
+    + '</div>';
+}
+
+function cuePrompt(){
+  const base = CFG.rtdbUrl ? CFG.rtdbUrl.replace(/\/+$/, '') : '';
+  if(!base){
+    return '[노가다 현장 비서실 · Cue 첨보반장]\n'
+      + '지금 이 현장은 임시 중계(ntfy) 모드입니다. 실시간 채널: https://ntfy.sh/' + CFG.ntfyTopic + '\n'
+      + '무전 읽기: GET https://ntfy.sh/' + CFG.ntfyTopic + '/json?poll=1\n'
+      + '답장 올리기: POST https://ntfy.sh/' + CFG.ntfyTopic + ' (body: {"t":"msg","d":{"id":"m-cue-<번호>","from":"cue","name":"Cue","emoji":"🕶️","text":"<답장>","ts":<현재 ms>}})\n'
+      + '규칙: @Cue 또는 @cue 가 들어온 최신 무전에만, 한 번만 답장. 한국어 2~4문장, 현장 반장 말투.';
+  }
+  const readUrl = base + '/rooms/' + CFG.room + '/messages.json';
+  return [
+    "너는 '노가다 현장 합동 비서실' 무전방에 있는 외부 첩보반장 Cue(🕶️)야. 아래 규칙대로만 움직여.",
+    '',
+    '[1] 무전 읽기 (1분마다, 또는 시킬 때마다)',
+    'GET ' + readUrl,
+    '→ {"m-xxx":{"id","from","name","emoji","text","ts"}, ...} 형태의 JSON이야.',
+    '',
+    '[2] 내가 불렸는지 확인',
+    '- 최신 무전 5개를 ts 순으로 읽고, text에 "@Cue" 또는 "@cue"가 들어간 무전을 찾아.',
+    '- 그 무전에 이미 from:"cue"인 내 답장이 있으면 또 답하지 마.',
+    '- 부르는 무전이 없으면 아무것도 올리지 마.',
+    '',
+    '[3] 답장 올리기 (POST)',
+    'POST ' + base + '/rooms/' + CFG.room + '/messages.json',
+    'Content-Type: application/json',
+    '{"id":"m-cue-<겹치지 않는 번호>","from":"cue","name":"Cue","emoji":"🕶️","text":"<답장 내용>","ts":<현재 시각 epoch ms>}',
+    '- id는 매번 새로 (m-cue- + 시간 + 임의숫자).',
+    '- from은 반드시 "cue", name은 "Cue", emoji는 "🕶️" 그대로. (바꾸면 현장에 다른 사람으로 뜸)',
+    '- ts는 현재 epoch milliseconds (예: 1795769859782).',
+    '',
+    '[4] 말투',
+    '- 한국어, 현장 반장 말투로 짧게 2~4문장. 결론부터.',
+    '- 첩보·조사가 필요한 건 "확인해서 바로 올리겠습니다"처럼 하고, 실제로 확인한 것만 말해.',
+    '- 확인 안 된 수치·규정은 지어내지 마. 비밀번호·개인정보는 절대 올리지 마.',
+    '',
+    '지금 [1]을 한 번 돌려서, 나를 부르는 무전이 있으면 [3]으로 답해줘.'
+  ].join('\n');
+}
+
+async function copyText(text, okMsg){
+  try{
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      await navigator.clipboard.writeText(text);
+      toast(okMsg); return true;
+    }
+  }catch(e){}
+  try{
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed'; ta.style.top = '-1000px'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try{ ta.setSelectionRange(0, text.length); }catch(e){}
+    const ok = document.execCommand && document.execCommand('copy');
+    document.body.removeChild(ta);
+    if(ok){ toast(okMsg); return true; }
+  }catch(e){}
+  openSheet(
+    '<h3>📋 복사할 문구</h3>'
+    + '<p class="desc">자동 복사가 막혀 있습니다. 아래 문구를 길게 눌러 전체 선택 → 복사한 뒤 Cue에게 붙여넣어 주세요.</p>'
+    + '<pre class="code" style="max-height:46vh;overflow:auto;white-space:pre-wrap">' + esc(text) + '</pre>'
+    + '<button class="btn" id="cpClose" style="width:100%;margin-top:10px">닫기</button>'
+  );
+  if($('#cpClose')) $('#cpClose').addEventListener('click', closeSheet);
+  return false;
+}
+
+function buildGeminiPrompt(msg){
+  const list = visibleMessages();
+  const i = list.findIndex(m => m.id === msg.id);
+  const before = (i >= 0 ? list.slice(0, i) : list).filter(m => !m.sys).slice(-6);
+  const line = m => (m.name || '무명') + ': ' + String(m.text || '').replace(/\s+/g, ' ').slice(0, 300);
+  const ctx = before.length ? before.map(line).join('\n') : '(아직 없음)';
+  return '[최근 무전 기록]\n' + ctx
+    + '\n\n[지금 온 무전]\n' + line(msg)
+    + '\n\n위 무전에 제미나이로서 답해라. 답변 본문만 써라.';
+}
+
+async function geminiFetch(promptText, key){
+  let lastModelErr = null;
+  const tried = [];
+  for(const model of GEMINI_MODELS){
+    const gen = { temperature: 0.85, maxOutputTokens: 1200, topP: 0.95 };
+    if(model.thinking) gen.thinkingConfig = { thinkingBudget: 0 };
+    const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + model.id
+      + ':generateContent?key=' + encodeURIComponent(key);
+    let r;
+    try{
+      r = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: GEMINI_PERSONA }] },
+          contents: [{ role: 'user', parts: [{ text: promptText }] }],
+          generationConfig: gen
+        })
+      });
+    }catch(e){
+      throw { kind: 'network', userMessage: '📡 제미나이 서버에 못 닿았습니다. 무전망(인터넷) 상태를 확인하고 다시 불러주세요.' };
+    }
+    let data = null;
+    try{ data = await r.json(); }catch(e){ data = null; }
+
+    if(r.ok && data){
+      const cand = (data.candidates || [])[0];
+      const parts = (cand && cand.content && cand.content.parts) || [];
+      const out = parts.map(p => (p && p.text) ? p.text : '').join('').trim();
+      if(out) return { text: out, model: model.id };
+      const why = (cand && cand.finishReason) || (data.promptFeedback && data.promptFeedback.blockReason) || '';
+      throw { kind: 'empty', userMessage: '🤖 제미나이 답이 비어 있습니다' + (why ? ' (' + why + ')' : '') + '. 질문을 조금 바꿔 다시 불러주세요.' };
+    }
+
+    const err = (data && data.error) || {};
+    const status = r.status;
+    const msg = String(err.message || err.status || '');
+
+    if(status === 404 || /not[ _]?found|not supported|does not exist|unknown model/i.test(msg)){
+      tried.push(model.id); lastModelErr = msg || ('HTTP ' + status);
+      continue; /* 다음 모델로 자동 재시도 */
+    }
+    if(status === 400 && /api key not valid|api_key_invalid|invalid api key|api key expired/i.test(msg)){
+      throw { kind: 'key', userMessage: '🔑 제미나이 API 키가 거부뒈습니다(400). 인력 현황 → 🔑 제미나이 API 키 설정에서 키를 다시 넣어주세요.' };
+    }
+    if(status === 403){
+      throw { kind: 'perm', userMessage: '🚫 이 키로는 호출 권한이 없습니다(403). Google AI Studio에서 키 상태·생성형 언어 API 사용 설정을 확인해 주세요.' };
+    }
+    if(status === 429){
+      throw { kind: 'quota', userMessage: '⏳ 제미나이 호출 한도를 넘었습니다(429). 1분쯤 뒤에 다시 불러주세요.' };
+    }
+    throw { kind: 'api', userMessage: '🤖 제미나이 호출이 실패했습니다(' + status + '). ' + msg.slice(0, 120) };
+  }
+  throw { kind: 'model', userMessage: '🤖 쓸 수 있는 제미나이 모델을 찾지 못했습니다(' + tried.join(', ') + '). Gemini API 키에서 사용 가능한 모델을 확인해 주세요. ' + String(lastModelErr || '').slice(0, 80) };
+}
+
+function askGemini(msg){
+  const key = geminiKey();
+  if(!key){
+    S.geminiNoKeyHint = true;
+    render();
+    toast('🔑 제미나이 API 키가 없습니다 — [인력 현황]에서 넣어주세요');
+    return Promise.resolve(null);
+  }
+  if(S.geminiBusy){
+    toast('🤖 제미나이가 이전 무전에 답하는 중입니다');
+    return Promise.resolve(null);
+  }
+  S.geminiBusy = true;
+  S.geminiNoKeyHint = false;
+  const base = S.agents.gemini || Object.assign({}, SEED_AGENTS.gemini);
+  upsertAgent(Object.assign({}, base, { status: '작업중', zone: 'work' }));
+  render();
+  return geminiFetch(buildGeminiPrompt(msg), key)
+    .then(res => postAiMessage(res.text, { model: res.model }))
+    .catch(err => {
+      if(err && err.kind === 'key') S.geminiNoKeyHint = true;
+      postAiMessage((err && err.userMessage) || '🤖 제미나이 호출이 살패했습니다.', { error: true });
+      return null;
+    })
+    .then(m => {
+      S.geminiBusy = false;
+      const back = Object.assign({}, S.agents.gemini || base, { status: '대기중', zone: 'work' });
+      upsertAgent(back);
+      render();
+      return m;
+    });
+}
+function postAiMessage(text, extra){
+  const m = Object.assign({ id:'m-' + uid(), from:'gemini', name:'제미나이', emoji:'🤖',
+                            text:String(text || ''), ts: now(), via:'gemini', ai:true }, extra || {});
+  S.messages[m.id] = m;
+  render(); persistState();
+  Wire.push({ t:'msg', ts: m.ts, d: m }).catch(()=>{});
+  setTimeout(scrollChatBottom, 30);
+  return m;
+}
+
+function openGeminiKey(){
+  const saved = geminiKey();
+  openSheet(
+    '<h3>🔑 제미나이 API 키 설정</h3>'
+    + '<p class="desc">무전기에 <b>@제미나이</b> 라고 부르면 이 키로 구글 제미나이에 바로 물어보고 답을 올려줍니다.</p>'
+    + '<div class="keybox">' + (saved ? '✅ 등록됨 · ' + esc(maskKey(saved)) : '아직 등록된 키가 없습니다') + '</div>'
+    + '<div class="fld" style="margin-top:12px"><label>Gemini API 키</label>'
+    + '<input type="text" id="gkInput" placeholder="AIza…" autocomplete="off" autocapitalize="off" spellcheck="false"></div>'
+    + '<button class="btn" id="gkSave" style="width:100%">저장</button>'
+    + '<button class="btn ghost" id="gkTest" style="width:100%;margin-top:8px">키 테스트</button>'
+    + (saved ? '<button class="btn ghost" id="gkDel" style="width:100%;margin-top:8px">키 삭제</button>' : '')
+    + '<div class="tiny muted" style="margin-top:12px;line-height:1.65">'
+    +   '• 키는 <b>이 브라우저(localStorage)</b>에만 저장됩니다. GitHub 공개 코드와 Firebase DB에는 올라가지 않습니다.<br>'
+    +   '• 휴대폰·PC 각각 처음 한 번씩 넣어주세요.<br>'
+    +   '• 발급: aistudio.google.com/apikey → Create API key<br>'
+    +   '• 모델: gemini-2.5-flash (안되면 2.0-flash · flash-latest 로 자동 재시도)'
+    + '</div>'
+  );
+  $('#gkSave').addEventListener('click', ()=>{
+    const v = $('#gkInput').value.trim();
+    if(!v){ toast('키를 입력하세요'); return; }
+    geminiSetKey(v);
+    S.geminiNoKeyHint = false;
+    closeSheet(); render();
+    toast('✅ 키를 이 브라우저에 저장했습니다');
+  });
+  $('#gkTest').addEventListener('click', async ()=>{
+    const v = $('#gkInput').value.trim() || geminiKey();
+    if(!v){ toast('키를 먼저 입력하세요'); return; }
+    toast('🤖 키 확인 중…');
+    try{
+      const res = await geminiFetch('핑. "정상"이라고만 답해줘.', v);
+      toast('✅ 키 정상 · ' + res.model);
+    }catch(e){ toast((e && e.userMessage) || '키 테스트 실패'); }
+  });
+  if($('#gkDel')) $('#gkDel').addEventListener('click', ()=>{
+    geminiSetKey(''); closeSheet(); render(); toast('키를 삭제했습니다');
+  });
 }
 
 /* ---------- 모달 ---------- */
@@ -883,6 +1229,7 @@ const IMG = 'IMG_SRC_PLACEHOLDER';
     for(const k in SEED_AGENTS) S.agents[k] = Object.assign({}, SEED_AGENTS[k], { updatedAt: t });
   }
   if(!S.messages[WELCOME.id]) S.messages[WELCOME.id] = Object.assign({}, WELCOME, { ts: now() - 120000 });
+  ensureCoreAgents();
 
   render();
   if(!S.me) openIdentity(true);

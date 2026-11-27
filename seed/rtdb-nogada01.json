@@ -19,6 +19,24 @@
           "status": "합류대기",
           "zone": "break",
           "updatedAt": 1764229000000
+        },
+        "gemini": {
+          "id": "gemini",
+          "name": "제미나이",
+          "role": "설계/기술 자문",
+          "emoji": "🤖",
+          "status": "대기중",
+          "zone": "work",
+          "updatedAt": 1764229000000
+        },
+        "cue": {
+          "id": "cue",
+          "name": "Cue",
+          "role": "외부 첩보반장",
+          "emoji": "🕶️",
+          "status": "대기중",
+          "zone": "yard",
+          "updatedAt": 1764229000000
         }
       },
       "messages": {
