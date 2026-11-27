@@ -307,11 +307,20 @@ const WELCOME = {
    API 키는 이 브라우저의 localStorage(nogada_gemini_api_key)에만 저장합니다.
    소스 코드·GitHub·Firebase RTDB에는 절대 넣지 않습니다. */
 const GEMINI_KEY_LS = 'nogada_gemini_api_key';
+/* 앞에서부터 차례로 시도합니다. 503(모델 과부하)·429(한도)·404(키에 없는 모델)·
+   5xx·응답 지연이 나면 다음 모델로 자동으로 넘어갑니다.
+   thinkingConfig(thinkingBudget:0)는 2.5 계열에만 넣습니다 — 2.0 계열은 이 필드를
+   받으면 400으로 거절합니다. 그래서 2.0·latest 항목에는 thinking 플래그를 두지 않습니다. */
 const GEMINI_MODELS = [
   { id:'gemini-2.5-flash', thinking:true },
+  { id:'gemini-2.5-flash-lite', thinking:true },
   { id:'gemini-2.0-flash' },
   { id:'gemini-flash-latest' }
 ];
+const GEMINI_RETRY_STATUS = [404, 429, 500, 502, 503, 504];
+const GEMINI_RETRY_DELAY_MS = 250;      // 모델 사이 재시도 간격
+const GEMINI_ATTEMPT_TIMEOUT_MS = 20000; // 모델 하나당 응답 대기
+const GEMINI_TOTAL_BUDGET_MS = 45000;    // 전체 재시도 예산
 const GEMINI_PERSONA = [
   "너는 '노가다 현장 합동 비서실' 무전방에 상주하는 설계·기술 자문 '제미나이'다.",
   "직책은 설계/기술 자문, 이모지는 🤖. 현장 사람들과 무전으로 짧게 주고받는다.",
@@ -984,60 +993,115 @@ function buildGeminiPrompt(msg){
     + '\n\n위 무전에 제미나이로서 답해라. 답변 본문만 써라.';
 }
 
-async function geminiFetch(promptText, key){
-  let lastModelErr = null;
-  const tried = [];
-  for(const model of GEMINI_MODELS){
-    const gen = { temperature: 0.85, maxOutputTokens: 1200, topP: 0.95 };
-    if(model.thinking) gen.thinkingConfig = { thinkingBudget: 0 };
-    const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + model.id
-      + ':generateContent?key=' + encodeURIComponent(key);
-    let r;
-    try{
-      r = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: GEMINI_PERSONA }] },
-          contents: [{ role: 'user', parts: [{ text: promptText }] }],
-          generationConfig: gen
-        })
-      });
-    }catch(e){
-      throw { kind: 'network', userMessage: '📡 제미나이 서버에 못 닿았습니다. 무전망(인터넷) 상태를 확인하고 다시 불러주세요.' };
-    }
+function geminiSleep(ms){
+  return new Promise(r => setTimeout(r, ms));
+}
+
+/* 모델 하나를 호출합니다. 응답 지연은 AbortController로 끊습니다. */
+async function geminiCallModel(model, promptText, key, timeoutMs){
+  const gen = { temperature: 0.85, maxOutputTokens: 1200, topP: 0.95 };
+  if(model.thinking) gen.thinkingConfig = { thinkingBudget: 0 }; /* 2.0 계열에는 넣지 않는다(400 방지) */
+  const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + model.id
+    + ':generateContent?key=' + encodeURIComponent(key);
+
+  let timer = null, ctrl = null, timedOut = false;
+  if(typeof AbortController !== 'undefined'){
+    ctrl = new AbortController();
+    timer = setTimeout(() => { timedOut = true; try{ ctrl.abort(); }catch(e){} }, timeoutMs);
+  }
+  try{
+    const opt = {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: GEMINI_PERSONA }] },
+        contents: [{ role: 'user', parts: [{ text: promptText }] }],
+        generationConfig: gen
+      })
+    };
+    if(ctrl) opt.signal = ctrl.signal;
+    const r = await fetch(url, opt);
     let data = null;
     try{ data = await r.json(); }catch(e){ data = null; }
+    return { r, data, timedOut: timedOut };
+  }catch(e){
+    return { r: null, data: null, timedOut: timedOut || !!(e && e.name === 'AbortError'), netErr: e };
+  }finally{
+    if(timer) clearTimeout(timer);
+  }
+}
 
-    if(r.ok && data){
-      const cand = (data.candidates || [])[0];
+/* 503·429·404·5xx·응답 지연이면 다음 모델로 넘어가 계속 시도합니다.
+   4개 모델이 모두 막히면 그때 한 번만 사용자에게 알립니다. */
+async function geminiFetch(promptText, key){
+  const started = Date.now();
+  const tried = [];
+  let lastModelErr = '';
+  let sawBusy = false, sawQuota = false, sawTimeout = false, sawNetwork = false, sawNotFound = false;
+
+  for(let i = 0; i < GEMINI_MODELS.length; i++){
+    const model = GEMINI_MODELS[i];
+    const left = GEMINI_TOTAL_BUDGET_MS - (Date.now() - started);
+    if(left <= 500) break; /* 전체 예산 소진 — 남은 모델은 건너뛴다 */
+    const res = await geminiCallModel(model, promptText, key, Math.min(GEMINI_ATTEMPT_TIMEOUT_MS, left));
+
+    if(res.r && res.r.ok && res.data){
+      const cand = (res.data.candidates || [])[0];
       const parts = (cand && cand.content && cand.content.parts) || [];
       const out = parts.map(p => (p && p.text) ? p.text : '').join('').trim();
-      if(out) return { text: out, model: model.id };
-      const why = (cand && cand.finishReason) || (data.promptFeedback && data.promptFeedback.blockReason) || '';
+      if(out) return { text: out, model: model.id, tried: tried };
+      const why = (cand && cand.finishReason) || (res.data.promptFeedback && res.data.promptFeedback.blockReason) || '';
       throw { kind: 'empty', userMessage: '🤖 제미나이 답이 비어 있습니다' + (why ? ' (' + why + ')' : '') + '. 질문을 조금 바꿔 다시 불러주세요.' };
     }
 
-    const err = (data && data.error) || {};
-    const status = r.status;
-    const msg = String(err.message || err.status || '');
+    if(!res.r){
+      /* 망 지연·시간초과·일시적 연결 실패 → 다음 모델로 재시도 */
+      tried.push(model.id);
+      if(res.timedOut) sawTimeout = true; else sawNetwork = true;
+      lastModelErr = res.timedOut ? '응답 지연(timeout)' : 'network: ' + String((res.netErr && res.netErr.message) || res.netErr || '');
+    } else {
+      const status = res.r.status;
+      const err = (res.data && res.data.error) || {};
+      const msg = String(err.message || err.status || '');
+      lastModelErr = msg || ('HTTP ' + status);
 
-    if(status === 404 || /not[ _]?found|not supported|does not exist|unknown model/i.test(msg)){
-      tried.push(model.id); lastModelErr = msg || ('HTTP ' + status);
-      continue; /* 다음 모델로 자동 재시도 */
+      if(status === 400 && /api key not valid|api_key_invalid|invalid api key|api key expired/i.test(msg)){
+        throw { kind: 'key', userMessage: '🔑 제미나이 API 키가 거부됐습니다(400). 인력 현황 → 🔑 제미나이 API 키 설정에서 키를 다시 넣어주세요.' };
+      }
+      if(status === 403){
+        throw { kind: 'perm', userMessage: '🚫 이 키로는 호출 권한이 없습니다(403). Google AI Studio에서 키 상태·생성형 언어 API 사용 설정을 확인해 주세요.' };
+      }
+
+      /* 404(모델 없음) · 429(한도) · 503(과부하) · 5xx(일시 장애) → 다음 모델로 재시도 */
+      const retriable = GEMINI_RETRY_STATUS.indexOf(status) >= 0
+        || /high demand|overloaded|unavailable|resource[ _]?exhausted|rate limit|try again later|not[ _]?found|not supported|does not exist|unknown model|internal error/i.test(msg);
+      if(!retriable){
+        throw { kind: 'api', userMessage: '🤖 제미나이 호출이 실패했습니다(' + status + '). ' + msg.slice(0, 120) };
+      }
+      tried.push(model.id);
+      if(status === 503) sawBusy = true;
+      if(status === 429) sawQuota = true;
+      if(status === 404) sawNotFound = true;
     }
-    if(status === 400 && /api key not valid|api_key_invalid|invalid api key|api key expired/i.test(msg)){
-      throw { kind: 'key', userMessage: '🔑 제미나이 API 키가 거부뒈습니다(400). 인력 현황 → 🔑 제미나이 API 키 설정에서 키를 다시 넣어주세요.' };
-    }
-    if(status === 403){
-      throw { kind: 'perm', userMessage: '🚫 이 키로는 호출 권한이 없습니다(403). Google AI Studio에서 키 상태·생성형 언어 API 사용 설정을 확인해 주세요.' };
-    }
-    if(status === 429){
-      throw { kind: 'quota', userMessage: '⏳ 제미나이 호출 한도를 넘었습니다(429). 1분쯤 뒤에 다시 불러주세요.' };
-    }
-    throw { kind: 'api', userMessage: '🤖 제미나이 호출이 실패했습니다(' + status + '). ' + msg.slice(0, 120) };
+
+    if(i < GEMINI_MODELS.length - 1) await geminiSleep(GEMINI_RETRY_DELAY_MS);
   }
-  throw { kind: 'model', userMessage: '🤖 쓸 수 있는 제미나이 모델을 찾지 못했습니다(' + tried.join(', ') + '). Gemini API 키에서 사용 가능한 모델을 확인해 주세요. ' + String(lastModelErr || '').slice(0, 80) };
+
+  /* 모든 모델 소진 — 원인에 맞게 한 번만 알린다 */
+  const detail = ' (시도: ' + (tried.join(' → ') || '-') + ')' + (lastModelErr ? ' · ' + String(lastModelErr).slice(0, 80) : '');
+  if(sawBusy){
+    throw { kind: 'busy', userMessage: '⏳ 지금 제미나이 모델이 모두 붐빕니다(503 — 일시적 수요 폭주). 1~2분 뒤에 다시 불러주세요.' + detail };
+  }
+  if(sawQuota){
+    throw { kind: 'quota', userMessage: '⏳ 제미나이 호출 한도를 넘었습니다(429). 1분쯤 뒤에 다시 불러주세요.' + detail };
+  }
+  if(sawTimeout || sawNetwork){
+    throw { kind: 'network', userMessage: '📡 제미나이 서버 응답이 늦거나 무전망(인터넷)이 불안정합니다. 잠시 뒤 다시 불러주세요.' + detail };
+  }
+  if(sawNotFound){
+    throw { kind: 'model', userMessage: '🤖 쓸 수 있는 제미나이 모델을 찾지 못했습니다. Gemini API 키에서 사용 가능한 모델을 확인해 주세요.' + detail };
+  }
+  throw { kind: 'api', userMessage: '🤖 제미나이 호출이 실패했습니다. 잠시 뒤 다시 불러주세요.' + detail };
 }
 
 function askGemini(msg){
