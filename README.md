@@ -200,12 +200,12 @@ https://jpak0813-bit.github.io/?db=https://pickle-nogada-office-default-rtdb.asi
 ```
 index.html            앱 전체 (이미지까지 한 파일에 들어 있음)
 app.template.html     편집용 원본 (이미지는 IMG_SRC_PLACEHOLDER 자리)
-assets/nogada-site.png / .webp / .jpg   스마트 오피스 일러스트 원본(4:3, 1200×900)
-assets/smart-office-raw.png             이미지 생성 원본(편집용)
+assets/nogada-site.png / .webp / .jpg   스마트 오피스 일러스트(4:3, 1200×900)
 firebase-rules.json   RTDB 보안 규칙
 seed/rtdb-nogada01.json  초기 데이터(에이전트·환영 무전·샘플 작업)
 tools/seed-rtdb.sh    시드 주입 스크립트
-tests/dom.test.js     jsdom 테스트 (기본 동작·@제미나이·@그록·Tavily·@Cue·키 노출 방지)
+tests/dom.test.js     jsdom 테스트 (기본 동작·맵 캐릭터·@제미나이·@그록·Tavily·@Cue·키 노출 방지)
+tests/preview.html    390×844 모바일 미리보기 (?auth=off&db=off, 상태는 localStorage에만)
 deploy.sh             GitHub Pages 배포 스크립트
 ```
 
