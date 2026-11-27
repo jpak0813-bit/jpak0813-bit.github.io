@@ -96,7 +96,7 @@ main{flex:1 1 auto; min-height:0; width:100%; max-width:960px; margin:0 auto; pa
 .mapwrap:after{content:"";position:absolute;inset:0;pointer-events:none;border-radius:inherit;
   background:linear-gradient(180deg,rgba(7,9,13,.34),transparent 17%,transparent 83%,rgba(7,9,13,.44))}
 /* 구역 이름표 */
-.zone{position:absolute;transform:translate(-50%,-50%);display:flex;align-items:center;gap:4px;z-index:4;
+.zone{position:absolute;transform:translate(-50%,-50%);display:flex;align-items:center;gap:4px;z-index:40;
   background:rgba(12,15,21,.78);backdrop-filter:blur(5px);border:1px solid rgba(255,195,0,.42);border-radius:11px;
   padding:4px 8px;color:var(--text);cursor:pointer;font-family:inherit;
   transition:transform .15s ease, box-shadow .15s ease, border-color .2s ease;max-width:44vw}
@@ -183,8 +183,8 @@ main{flex:1 1 auto; min-height:0; width:100%; max-width:960px; margin:0 auto; pa
   #view-map.on{gap:8px}
   .zone{padding:3px 6px;border-radius:9px;gap:2px}
   .zone .zn{font-size:9px}
-  .actor .chwrap{width:40px;height:46px}
-  .actor .nm{font-size:9px;max-width:62px}
+  .actor .chwrap{width:43px;height:49px}
+  .actor .nm{font-size:9.5px;max-width:64px}
 }
 @media(min-width:760px){
   .actor .chwrap{width:48px;height:55px}
@@ -644,7 +644,7 @@ const CHAR_DRAW = {
     + '<circle cx="23.6" cy="23.2" r="2.3" fill="#2a1d00"/><circle cx="33.2" cy="23.2" r="2.3" fill="#2a1d00"/>'
     + '<path d="M25.4 20.4l.5 1.5 1.5.5-1.5.5-.5 1.5-.5-1.5-1.5-.5 1.5-.5Z" fill="#ffd84d"/>'
     + '<path d="M35 20.4l.5 1.5 1.5.5-1.5.5-.5 1.5-.5-1.5-1.5-.5 1.5-.5Z" fill="#ffd84d"/></g>'
-    + '<path d="M24.8 27.6q3.2 3.6 6.4 0Z" fill="#4a2c00"/>'
+    + '<path d="M25.6 27.8q2.4 2.4 4.8 0Z" fill="#4a2c00"/>'
     + '<ellipse cx="17.6" cy="26.8" rx="2.2" ry="1.2" fill="#ff8a5c" opacity=".5"/>'
     + '<ellipse cx="38.4" cy="26.8" rx="2.2" ry="1.2" fill="#ff8a5c" opacity=".5"/>'
     + '</g>';
@@ -1553,8 +1553,8 @@ function syncActors(layer, agents, poses){
     btn.setAttribute('data-state', p.state);
     if(btn.style.left !== p.x + '%') btn.style.left = p.x + '%';
     if(btn.style.top !== p.y + '%') btn.style.top = p.y + '%';
-    /* 아래(y가 큰) 캐릭터가 앞에 보이도록 — 2.5D 느낌 */
-    btn.style.zIndex = String(3 + Math.round(p.y));
+    /* 아래(y가 큰) 캐릭터가 앞에 보이도록 — 2.5D 느낌(구역 이름표보다는 아래) */
+    btn.style.zIndex = String(3 + Math.round(p.y * 0.3));
     const label = a.name + ' · ' + a.status + ' · ' + p.where;
     if(btn.getAttribute('aria-label') !== label) btn.setAttribute('aria-label', label);
     const bd = btn.querySelector('.bd');
