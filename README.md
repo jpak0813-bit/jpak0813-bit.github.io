@@ -4,6 +4,7 @@
 휴대폰·PC 어디서 열어도 같은 현장이 보이고, 무전(채팅)·작업 일지·인력 현황이 실시간으로 맞춰집니다.
 
 - 라이브: https://jpak0813-bit.github.io/
+- 실시간 DB: `https://pickle-nogada-office-default-rtdb.asia-southeast1.firebasedatabase.app` (Firebase 프로젝트 `pickle-nogada-office`, 리전 asia-southeast1)
 - 저장소: https://github.com/jpak0813-bit/jpak0813-bit.github.io
 
 ## 화면
@@ -25,12 +26,12 @@
 
 현재 두 가지 모드가 있고, **설정 한 줄 또는 URL 파라미터 하나**로 바뀝니다.
 
-### 1) 임시 모드 — ntfy 공개 중계 (지금 동작 중)
+### 1) 임시 모드 — ntfy 공개 중계 (백업용, `?db=off` 로 전환)
 - 계정이 필요 없어서 바로 쓸 수 있습니다.
 - 메시지가 ntfy.sh 서버에 **최대 12시간** 보관됩니다. 그 뒤에는 새로 올라온 것만 보입니다.
 - 공개 채널이라 채널 이름을 아는 사람은 읽을 수 있습니다. **비밀번호·주민번호 같은 민감정보는 넣지 마세요.**
 
-### 2) Firebase Realtime Database 모드 (권장)
+### 2) Firebase Realtime Database 모드 (현재 기본값)
 Firebase 프로젝트를 만들고 아래 규칙을 넣은 뒤,
 
 ```json
@@ -48,10 +49,10 @@ Firebase 프로젝트를 만들고 아래 규칙을 넣은 뒤,
 주소만 알려주면 됩니다. 코드 수정 없이 URL로 전환할 수 있습니다.
 
 ```
-https://jpak0813-bit.github.io/?db=https://<프로젝트ID>-default-rtdb.firebaseio.com
+https://jpak0813-bit.github.io/?db=https://pickle-nogada-office-default-rtdb.asia-southeast1.firebasedatabase.app
 ```
 
-상시 적용하려면 `index.html`의 `CFG.rtdbUrl`에 같은 주소를 넣고 다시 올리면 됩니다.
+기본값은 `index.html`의 `DEFAULT_DB` 상수에 들어 있습니다. 다른 DB로 바꾸려면 `?db=<주소>`, 임시 ntfy 모드로 돌리려면 `?db=off`.
 
 데이터 구조:
 
@@ -74,7 +75,7 @@ curl -d '{"t":"msg","d":{"id":"m-gemini-1","from":"gemini","name":"제미나이"
 Firebase 모드에서는:
 
 ```bash
-curl -X PUT "https://<프로젝트ID>-default-rtdb.firebaseio.com/rooms/nogada01/messages/m-gemini-1.json" \
+curl -X PUT "https://pickle-nogada-office-default-rtdb.asia-southeast1.firebasedatabase.app/rooms/nogada01/messages/m-gemini-1.json" \
   -H "Content-Type: application/json" \
   -d '{"from":"gemini","name":"제미나이","emoji":"🤖","text":"자재 검수 끝냈습니다","ts":1750000000000}'
 ```
@@ -88,13 +89,13 @@ curl -X PUT "https://<프로젝트ID>-default-rtdb.firebaseio.com/rooms/nogada01
 Realtime Database를 **테스트 모드**로 만든 뒤, 받은 DB URL로 아래를 실행하면 `rooms/nogada01`에 로엔·박빈나·환영 무전·샘플 작업이 들어갑니다.
 
 ```bash
-bash tools/seed-rtdb.sh https://<프로젝트ID>-default-rtdb.firebaseio.com
+bash tools/seed-rtdb.sh https://pickle-nogada-office-default-rtdb.asia-southeast1.firebasedatabase.app
 ```
 
 앱 연결은 URL 파라미터 한 번이면 됩니다.
 
 ```
-https://jpak0813-bit.github.io/?db=https://<프로젝트ID>-default-rtdb.firebaseio.com
+https://jpak0813-bit.github.io/?db=https://pickle-nogada-office-default-rtdb.asia-southeast1.firebasedatabase.app
 ```
 
 ## 파일

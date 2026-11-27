@@ -254,12 +254,12 @@ details.help .body{padding-bottom:12px;color:var(--muted);font-size:12.5px;line-
    - 저장/실시간: Firebase RTDB (CFG.rtdbUrl) 또는 임시 ntfy 중계
    ========================================================= */
 const QS = new URLSearchParams(location.search);
+const DEFAULT_DB = 'https://pickle-nogada-office-default-rtdb.asia-southeast1.firebasedatabase.app';
 const CFG = {
   // ?room=이름 으로 또 다른 현장을 만들 수 있습니다.
   room: (QS.get('room') || 'nogada01').replace(/[^A-Za-z0-9_-]/g, ''),
-  // Firebase Realtime Database URL. 값이 있으면 자동으로 RTDB 모드로 동작합니다.
-  // 예: ?db=https://pickle-nogada-office-default-rtdb.firebaseio.com
-  rtdbUrl: QS.get('db') || '',
+  // Firebase Realtime Database URL. ?db=<다른 DB주소> 로 바꿀 수 있고, ?db=off 면 임시 중계(ntfy) 모드.
+  rtdbUrl: (QS.get('db') === 'off' ? '' : (QS.get('db') || DEFAULT_DB)),
   // 임시 실시간 채널 (계정 불필요, 메시지 12시간 보관)
   ntfyTopic: QS.get('ch') || 'nogada-office-5v8n3kq7w2xm9lyt'
 };
