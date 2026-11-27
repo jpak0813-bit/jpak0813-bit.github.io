@@ -56,6 +56,7 @@ function boot(opts = {}) {
     pretendToBeVisual: true,
     url: opts.url || ('https://example.test/?db=off&ch=nogada-test-' + Math.random().toString(36).slice(2, 8)),
     beforeParse(window) {
+      if (opts.storedMe) window.localStorage.setItem('nogada.me', JSON.stringify(opts.storedMe));
       window.fetch = async (url, opt = {}) => {
         const u = String(url);
         if (u.includes('generativelanguage.googleapis.com')) {
@@ -118,8 +119,8 @@ function fakeFirebase() {
   authFn.GoogleAuthProvider = class { setCustomParameters() {} };
   api.initializeApp = cfg => { api.config = cfg; };
   api.auth = authFn;
-  api.signIn = async (email) => {
-    const user = { email, uid: 'uid-' + email, getIdToken: async () => 'test-id-token' };
+  api.signIn = async (email, emailVerified = true) => {
+    const user = { email, emailVerified, uid: 'uid-' + email, getIdToken: async () => 'test-id-token' };
     api.user = user;
     api.listeners.forEach(f => f(user));
     return user;
@@ -1112,6 +1113,23 @@ function fakeFirebase() {
     await wait(100);
     ok('auth: 로그아웃 후 다시 게이트', !d.querySelector('#authGate').hidden);
     ok('auth: 로그아웃 후 RTDB 재호출 없음', fbCalls.filter(c => c.url.includes('auth=')).length > 0);
+    dom.window.close();
+  }
+
+  /* ============ 6b2) 현장주 출입증은 확인된 현장주 Google 계정 전용 ============ */
+  {
+    const fb = fakeFirebase();
+    const { dom, w, d } = boot({ url: 'https://example.test/?room=nogada01', firebase: fb,
+      storedMe: { id:'jingyu', name:'사장님', emoji:'🧑‍✈️' } });
+    await wait(100);
+    await fb.signIn('colleague@gmail.com');
+    await wait(160);
+    ok('identity: non-owner auth clears cached jingyu identity', w.localStorage.getItem('nogada.me') === null);
+    ok('identity: non-owner auth cannot select jingyu', !d.querySelector('[data-me="jingyu"]'));
+    ok('identity: non-owner retains other identity choices', d.querySelectorAll('[data-me]').length === 3);
+    d.querySelector('[data-me="roen"]').click();
+    await wait(30);
+    ok('identity: non-owner can persist ordinary identity', JSON.parse(w.localStorage.getItem('nogada.me')).id === 'roen');
     dom.window.close();
   }
 
