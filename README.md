@@ -214,6 +214,8 @@ Realtime Database를 **테스트 모드**로 만든 뒤, 받은 DB URL로 아래
 bash tools/seed-rtdb.sh https://pickle-nogada-office-default-rtdb.asia-southeast1.firebasedatabase.app
 ```
 
+이미 있는 인력(`agents/{id}`에 `name`이 있는 경우)은 **건너뜁니다** — 화면에서 바꾼 이름을 시드가 기본 이름으로 덮어쓰지 않게 하기 위해서입니다.
+
 앱 연결은 URL 파라미터 한 번이면 됩니다.
 
 ```
@@ -229,7 +231,7 @@ assets/nogada-site.png / .webp / .jpg   스마트 오피스 일러스트(4:3, 12
 firebase-rules.json   RTDB 보안 규칙
 seed/rtdb-nogada01.json  초기 데이터(에이전트·환영 무전·샘플 작업)
 tools/seed-rtdb.sh    시드 주입 스크립트
-tests/dom.test.js     jsdom 테스트 (기본 동작·맵 캐릭터·@제미나이·@그록·Tavily·@Cue·키 노출 방지)
+tests/dom.test.js     jsdom 테스트 (기본 동작·맵 캐릭터·자율 이동·이름 변경·@제미나이·@그록·Tavily·@Cue·키 노출 방지)
 tests/preview.html    390×844 모바일 미리보기 (?auth=off&db=off, 상태는 localStorage에만)
 deploy.sh             GitHub Pages 배포 스크립트
 ```
