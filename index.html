@@ -756,6 +756,7 @@ function renameAgent(id, name, role){
     nameEditedAt: t, roleEditedAt: t
   });
   upsertAgent(next);
+  syncMyIdentity(id, next);
   return next;
 }
 /* 기본값 복원 — 처음 이름(로엔·제미나이 …)으로 되돌립니다. */
@@ -770,7 +771,15 @@ function resetAgentName(id){
     nameEditedAt: t, roleEditedAt: t
   });
   upsertAgent(next);
+  syncMyIdentity(id, next);
   return next;
+}
+/* 내 출입증이 그 인력이면 헤더 이름도 같이 바꿉니다(지도와 헤더가 따로 놀지 않게). */
+function syncMyIdentity(id, a){
+  if(!S.me || S.me.id !== id) return;
+  S.me = Object.assign({}, S.me, { name: a.name, role: a.role || S.me.role });
+  LS.set('me', S.me);
+  renderHeader();
 }
 
 /* ---------- 제미나이(@제미나이) 즉답 설정 ----------
