@@ -3,9 +3,24 @@
     ".read": false,
     ".write": false,
     "rooms": {
-      "nogada01": {
-        ".read": true,
-        ".write": true
+      "$room": {
+        ".read": "auth != null && auth.token.email_verified == true && (auth.token.email == 'jpak0813@gmail.com' || root.child('rooms').child($room).child('allowedEmails').child(auth.token.email.replace('.', ',')).val() == true)",
+        ".write": false,
+        "allowedEmails": {
+          "$key": {
+            ".write": "auth != null && auth.token.email_verified == true && auth.token.email == 'jpak0813@gmail.com'",
+            ".validate": "newData.isBoolean()"
+          }
+        },
+        "messages": {
+          ".write": "auth != null && auth.token.email_verified == true && (auth.token.email == 'jpak0813@gmail.com' || root.child('rooms').child($room).child('allowedEmails').child(auth.token.email.replace('.', ',')).val() == true)"
+        },
+        "agents": {
+          ".write": "auth != null && auth.token.email_verified == true && (auth.token.email == 'jpak0813@gmail.com' || root.child('rooms').child($room).child('allowedEmails').child(auth.token.email.replace('.', ',')).val() == true)"
+        },
+        "tasks": {
+          ".write": "auth != null && auth.token.email_verified == true && (auth.token.email == 'jpak0813@gmail.com' || root.child('rooms').child($room).child('allowedEmails').child(auth.token.email.replace('.', ',')).val() == true)"
+        }
       }
     }
   }

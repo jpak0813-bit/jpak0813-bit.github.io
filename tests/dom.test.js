@@ -26,7 +26,9 @@ function boot(opts = {}) {
   const geminiCalls = [];     // Gemini API 호출 기록
   const groqCalls = [];       // Groq API 호출 기록
   const tavilyCalls = [];     // Tavily Search API 호출 기록
+  const fbCalls = [];         // Firebase RTDB REST 호출 기록
   const copied = [];
+  const fbResponder = opts.fbResponder || (() => ({ ok: true, json: async () => ({}), text: async () => '' }));
   const geminiResponder = opts.geminiResponder || (() => ({
     ok: true, status: 200,
     json: async () => ({ candidates: [{ content: { parts: [{ text: '거푸집은 위에서부터 한 단씩 내려오면 됩니다. 안전대 먼저 겁니다.' }] } }] })
@@ -72,6 +74,11 @@ function boot(opts = {}) {
           return groqResponder(call, groqCalls.length);
         }
         if (u.includes('ntfy.sh') && u.includes('/json?poll=1')) return { ok: true, text: async () => '' };
+        if (u.includes('firebasedatabase.app')) {
+          const call = { url: u, method: opt.method || 'GET', body: opt.body ? JSON.parse(opt.body) : null };
+          fbCalls.push(call);
+          return fbResponder(call, fbCalls.length);
+        }
         if (u.includes('ntfy.sh') && opt.method === 'POST') {
           try { published.push(JSON.parse(opt.body)); } catch (e) {}
           return { ok: true, json: async () => ({}) };
@@ -85,6 +92,7 @@ function boot(opts = {}) {
         close() {}
       };
       window.confirm = () => true;
+      if (opts.firebase) window.firebase = opts.firebase;
       window.requestAnimationFrame = cb => setTimeout(() => cb(0), 0);
       window.scrollTo = () => {};
       Object.defineProperty(window.navigator, 'clipboard', {
@@ -93,7 +101,30 @@ function boot(opts = {}) {
       });
     }
   });
-  return { dom, w: dom.window, d: dom.window.document, published, geminiCalls, groqCalls, tavilyCalls, copied };
+  return { dom, w: dom.window, d: dom.window.document, published, geminiCalls, groqCalls, tavilyCalls, fbCalls, copied };
+}
+
+/* Firebase Auth 흉내 — 실제 SDK 없이 로그인 상태 변화를 시험합니다. */
+function fakeFirebase() {
+  const api = { apps: [], config: null, listeners: [], user: null };
+  const instance = {
+    onAuthStateChanged(cb) { api.listeners.push(cb); },
+    getRedirectResult: async () => null,
+    signOut: async () => { api.user = null; api.listeners.forEach(f => f(null)); },
+    signInWithPopup: async () => { throw Object.assign(new Error('no popup'), { code: 'auth/popup-closed-by-user' }); },
+    signInWithRedirect: async () => {}
+  };
+  const authFn = () => instance;
+  authFn.GoogleAuthProvider = class { setCustomParameters() {} };
+  api.initializeApp = cfg => { api.config = cfg; };
+  api.auth = authFn;
+  api.signIn = async (email) => {
+    const user = { email, uid: 'uid-' + email, getIdToken: async () => 'test-id-token' };
+    api.user = user;
+    api.listeners.forEach(f => f(user));
+    return user;
+  };
+  return api;
 }
 
 (async () => {
@@ -1023,9 +1054,9 @@ function boot(opts = {}) {
     dom.window.close();
   }
 
-  /* ============ 6) @Cue 문구 복사 (Firebase RTDB 모드 = 기본값) ============ */
+  /* ============ 6) @Cue 문구 복사 (Firebase RTDB 모드 · 로그인 없이 auth=off) ============ */
   {
-    const { dom, d, copied } = boot({ url: 'https://example.test/?room=nogada01' });
+    const { dom, d, copied } = boot({ url: 'https://example.test/?room=nogada01&auth=off' });
     await wait(160);
     d.querySelector('[data-me="jingyu"]').click();
     await wait(30);
@@ -1043,6 +1074,54 @@ function boot(opts = {}) {
     ok('cue prompt: name Cue', text.includes('"name":"Cue"'));
     ok('cue prompt: emoji 🕶️', text.includes('"emoji":"🕶️"'));
     ok('cue prompt: @Cue mention rule', text.includes('@Cue'));
+    dom.window.close();
+  }
+
+  /* ============ 6b) Google 로그인 게이트 (RTDB 모드) ============ */
+  {
+    const fb = fakeFirebase();
+    const { dom, d, fbCalls } = boot({ url: 'https://example.test/?room=nogada01', firebase: fb });
+    await wait(120);
+    ok('auth: 로그인 전 게이트 표시', !d.querySelector('#authGate').hidden);
+    ok('auth: Google 로그인 버튼', !!d.querySelector('#agSignIn'));
+    ok('auth: 로그인 전 RTDB 호출 0', fbCalls.length === 0, 'calls=' + fbCalls.length);
+    ok('auth: 헤더에 로그인 필요', d.querySelector('#authWho').textContent.includes('로그인 필요'));
+    ok('auth: 승인된 도메인 안내 없음(정상 상태)', !d.querySelector('#authGateCard').textContent.includes('승인된 도메인에 없습니다'));
+
+    await fb.signIn('jpak0813@gmail.com');
+    await wait(160);
+    ok('auth: 로그인 후 게이트 사라짐', d.querySelector('#authGate').hidden);
+    ok('auth: RTDB 호출에 auth 토큰', fbCalls.some(c => c.url.includes('auth=test-id-token')));
+    ok('auth: 헤더에 계정 표시', d.querySelector('#authWho').textContent.includes('jpak0813@gmail.com'));
+    ok('auth: 로그인 후 출입증 시트', d.querySelector('#overlay').classList.contains('on'));
+
+    d.querySelector('[data-me="jingyu"]').click();
+    await wait(30);
+    d.querySelector('.tab[data-tab="crew"]').click();
+    await wait(60);
+    ok('auth: 인력 현황에 계정 카드', d.querySelector('#view-crew').textContent.includes('현장주 계정'));
+    ok('auth: 로그아웃 버튼', !!d.querySelector('#authOutBtn'));
+    ok('auth: 현장주에게만 허용 이메일 추가칸', !!d.querySelector('#allowEmail'));
+
+    d.querySelector('#authOutBtn').click();
+    await wait(100);
+    ok('auth: 로그아웃 후 다시 게이트', !d.querySelector('#authGate').hidden);
+    ok('auth: 로그아웃 후 RTDB 재호출 없음', fbCalls.filter(c => c.url.includes('auth=')).length > 0);
+    dom.window.close();
+  }
+
+  /* ============ 6c) 권한 없는 계정 → 401 → 안내 ============ */
+  {
+    const fb = fakeFirebase();
+    const denied = () => ({ ok: false, status: 401, json: async () => ({ error: 'Permission denied' }), text: async () => '' });
+    const { dom, d } = boot({ url: 'https://example.test/?room=nogada01', firebase: fb, fbResponder: denied });
+    await wait(80);
+    await fb.signIn('stranger@gmail.com');
+    await wait(200);
+    ok('auth: 권한 없는 계정 → 게이트 유지', !d.querySelector('#authGate').hidden);
+    ok('auth: 거부 사유·계정 표시', d.querySelector('#authGateCard').textContent.includes('권한이 없는 계정')
+      && d.querySelector('#authGateCard').textContent.includes('stranger@gmail.com'));
+    ok('auth: 다른 계정 로그인 버튼', !!d.querySelector('#agSwitch'));
     dom.window.close();
   }
 

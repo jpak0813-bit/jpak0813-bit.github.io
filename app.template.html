@@ -53,6 +53,8 @@ header.hdr{
 .mebtn{margin-left:auto;background:var(--panel2);border:1px solid var(--yellow-dim);color:var(--text);
   border-radius:999px;padding:7px 12px;font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:6px;cursor:pointer;font-family:inherit}
 .mebtn:active{transform:scale(.97)}
+.authwho{font-size:10.5px;color:var(--muted2);border-left:1px solid var(--yellow-dim);padding-left:7px;margin-left:2px;
+  max-width:46vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .hazard{height:6px;background:var(--hazard);opacity:.95}
 main{flex:1 1 auto; min-height:0; width:100%; max-width:960px; margin:0 auto; padding:14px 14px 12px;
   overflow-y:auto; overflow-x:hidden; -webkit-overflow-scrolling:touch; scrollbar-width:thin;
@@ -244,6 +246,29 @@ details.help summary::-webkit-details-marker{display:none}
 details.help[open] summary{border-bottom:1px solid var(--yellow-dim);margin-bottom:10px}
 details.help .body{padding-bottom:12px;color:var(--muted);font-size:12.5px;line-height:1.6}
 .empty{text-align:center;color:var(--muted2);font-size:12.5px;padding:18px 8px}
+
+/* ---------- Google 로그인 게이트 ---------- */
+.authgate{position:fixed;inset:0;z-index:300;display:flex;align-items:center;justify-content:center;padding:18px;
+  background:radial-gradient(700px 420px at 70% -10%,rgba(255,195,0,.14),transparent 60%),rgba(10,9,7,.97);backdrop-filter:blur(6px)}
+.authgate[hidden]{display:none}
+.agcard{width:100%;max-width:420px;background:linear-gradient(180deg,var(--panel2),var(--panel));
+  border:1px solid var(--yellow-dim);border-radius:20px;padding:22px 20px calc(20px + var(--safe-b));box-shadow:0 24px 60px -24px #000}
+.agcard .aghat{width:52px;height:52px;border-radius:15px;display:grid;place-items:center;font-size:26px;margin-bottom:14px;
+  background:linear-gradient(180deg,#ffd84d,#f0b400);box-shadow:0 4px 0 #a67f00}
+.agcard h2{margin:0 0 6px;font-size:19px;letter-spacing:-.4px}
+.agcard p{margin:0 0 14px;font-size:13px;color:var(--muted);line-height:1.6}
+.agcard p b{color:var(--text)}
+.agmail{display:inline-block;background:var(--panel3);border:1px solid var(--yellow-dim);border-radius:999px;
+  padding:4px 11px;font-size:12px;color:var(--text);word-break:break-all;margin-bottom:12px}
+.agbtn{width:100%;background:var(--yellow);color:#191600;border:none;border-radius:13px;padding:13px;font-size:14.5px;font-weight:900;
+  font-family:inherit;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px}
+.agbtn:active{transform:scale(.99)}
+.agbtn[disabled]{opacity:.6}
+.agbtn.ghost{background:var(--panel3);color:var(--text);border:1px solid var(--yellow-dim);font-weight:800;margin-top:8px}
+.agerr{margin-top:12px;font-size:12px;color:#ffb3ac;line-height:1.5;background:rgba(255,107,94,.1);border:1px solid rgba(255,107,94,.3);border-radius:11px;padding:9px 11px}
+.agnote{margin-top:14px;font-size:11.5px;color:var(--muted2);line-height:1.55}
+.authcard .who{display:flex;align-items:center;gap:10px}
+.authcard .who .av{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;background:var(--panel3);font-size:18px}
 </style>
 </head>
 <body>
@@ -253,7 +278,7 @@ details.help .body{padding-bottom:12px;color:var(--muted);font-size:12.5px;line-
     <div class="hat">👷</div>
     <div>
       <h1>노가다 현장 합동 비서실</h1>
-      <div class="sub"><span class="dot" id="connDot"></span><span id="connTxt">무전망 연결중…</span></div>
+      <div class="sub"><span class="dot" id="connDot"></span><span id="connTxt">무전망 연결중…</span><span class="authwho" id="authWho"></span></div>
     </div>
     <button class="mebtn" id="meBtn"><span id="meEmoji">🧑‍✈️</span><span id="meName">사장님</span></button>
   </div>
@@ -279,6 +304,11 @@ details.help .body{padding-bottom:12px;color:var(--muted);font-size:12.5px;line-
 <div class="overlay" id="overlay"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 
+<div class="authgate" id="authGate" hidden><div class="agcard" id="authGateCard"></div></div>
+
+<!-- Firebase 웹 SDK (Auth + RTDB REST 인증 토큰용). 아래 설정은 공개용 구성값입니다. -->
+<script src="https://www.gstatic.com/firebasejs/13.4.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/13.4.0/firebase-auth-compat.js"></script>
 <script>
 /* =========================================================
    노가다 현장 합동 비서실
@@ -293,6 +323,27 @@ const CFG = {
   rtdbUrl: (QS.get('db') === 'off' ? '' : (QS.get('db') || DEFAULT_DB)),
   // 임시 실시간 채널 (계정 불필요, 메시지 12시간 보관)
   ntfyTopic: QS.get('ch') || 'nogada-office-5v8n3kq7w2xm9lyt'
+};
+
+/* ---------- Google 로그인 (Firebase Auth) ----------
+   2026-11-27부터 RTDB 보안 규칙이 "Google 로그인한 허용된 계정"만 읽기/쓰기를 허용합니다.
+   아래 값은 Firebase 웹 앱 공개 구성(비밀번호가 아님)입니다. 실제 접근 권한은
+   RTDB 규칙과 Firebase Console의 승인된 도메인 목록이 결정합니다.
+   ?auth=off 를 붙이면 로그인 없이 예전처럼 열립니다(로컬 단위 테스트·비상용). */
+const OWNER_EMAIL = 'jpak0813@gmail.com';
+const FIREBASE_CFG = {
+  apiKey: 'AIzaSyD5Qc2RjZVAAtx0wPyNcMDOtvRey7-nq-o',
+  authDomain: 'pickle-nogada-office.firebaseapp.com',
+  databaseURL: 'https://pickle-nogada-office-default-rtdb.asia-southeast1.firebasedatabase.app',
+  projectId: 'pickle-nogada-office',
+  storageBucket: 'pickle-nogada-office.firebasestorage.app',
+  messagingSenderId: '1059398018456',
+  appId: '1:1059398018456:web:e3d3ea2bad3711432fb7ed'
+};
+const AUTH = {
+  required: !!CFG.rtdbUrl && QS.get('auth') !== 'off',
+  user: null, token: '', tokenAt: 0, denied: '', error: '', busy: false,
+  allowed: {}, allowedLoaded: false
 };
 
 const ZONES = {
@@ -517,6 +568,26 @@ const Wire = {
   mode: CFG.rtdbUrl ? 'rtdb' : 'ntfy',
   base(){ return CFG.rtdbUrl.replace(/\/+$/,''); },
   url(path){ return this.base() + '/rooms/' + CFG.room + path + '.json'; },
+  /* RTDB REST/SSE 호출에는 로그인 토큰을 ?auth= 로 붙입니다.
+     토큰이 없으면(로그인 전) 인증 없이 호출하고, 401을 받으면 로그인 화면을 띄웁니다. */
+  query(path, extra){
+    const parts = [];
+    if(this.mode === 'rtdb' && AUTH.required && AUTH.token) parts.push('auth=' + encodeURIComponent(AUTH.token));
+    if(extra) parts.push(extra);
+    return this.url(path) + (parts.length ? '?' + parts.join('&') : '');
+  },
+  /* 토큰은 1시간 유효합니다. 40분이 지나면 미리 새로 받아옵니다. */
+  async ensureToken(force){
+    if(this.mode !== 'rtdb' || !AUTH.required || !AUTH.user) return AUTH.token || '';
+    if(!force && AUTH.token && (now() - AUTH.tokenAt) < 2400000) return AUTH.token;
+    try{
+      AUTH.token = await AUTH.user.getIdToken(!!force);
+      AUTH.tokenAt = now();
+    }catch(e){}
+    return AUTH.token || '';
+  },
+  closeStream(){ if(this._es){ try{ this._es.close(); }catch(e){} this._es = null; } },
+  restartStream(){ this.closeStream(); this.stream(); },
 
   async start(){
     try{
@@ -538,7 +609,11 @@ const Wire = {
   /* RTDB */
   async pull(){
     if(this.mode === 'rtdb'){
-      const r = await fetch(this.url('') + '?t=' + now());
+      if(AUTH.denied) throw new Error('rtdb denied');
+      if(AUTH.required && !AUTH.user) throw new Error('rtdb login required');
+      await this.ensureToken();
+      const r = await fetch(this.query('', 't=' + now()));
+      if(r.status === 401 || r.status === 403){ authDenied(); throw new Error('rtdb ' + r.status); }
       if(!r.ok) throw new Error('rtdb ' + r.status);
       mergeSnapshot(await r.json());
       ensureCoreAgents();
@@ -556,9 +631,11 @@ const Wire = {
   },
   stream(){
     if(this.mode === 'rtdb'){
+      if(AUTH.required && !AUTH.token) return;
+      this.closeStream();
       let t = null;
       try{
-        const es = new EventSource(this.url(''));
+        const es = new EventSource(this.query('', 't=' + now()));
         const reload = () => { clearTimeout(t); t = setTimeout(()=>{ this.pull().catch(()=>{}); }, 350); };
         es.addEventListener('put', reload);
         es.addEventListener('patch', reload);
@@ -584,6 +661,8 @@ const Wire = {
 
   async push(env){
     if(this.mode === 'rtdb'){
+      if(AUTH.denied) throw new Error('rtdb denied');
+      if(AUTH.required && !AUTH.user) throw new Error('rtdb login required');
       const d = env.d || {};
       let path, method = 'PUT', body = d;
       if(env.t === 'msg'){ path = '/messages/' + d.id; }
@@ -599,7 +678,9 @@ const Wire = {
       } else return;
       const opt = { method };
       if(body) { opt.body = JSON.stringify(body); opt.headers = { 'Content-Type':'application/json' }; }
-      const r = await fetch(this.url(path), opt);
+      await this.ensureToken();
+      const r = await fetch(this.query(path), opt);
+      if(r.status === 401 || r.status === 403){ authDenied(); throw new Error('rtdb write ' + r.status); }
       if(!r.ok) throw new Error('rtdb write ' + r.status);
       return;
     }
@@ -608,6 +689,118 @@ const Wire = {
     if(!r.ok) throw new Error('ntfy write ' + r.status);
   }
 };
+
+/* ---------- Google 로그인 게이트 ---------- */
+function authEmail(){ return (AUTH.user && AUTH.user.email) || ''; }
+function isOwner(){ return authEmail().toLowerCase() === OWNER_EMAIL; }
+function authAvailable(){ return !!(window.firebase && window.firebase.auth); }
+
+function showAuthGate(){
+  const g = $('#authGate'), card = $('#authGateCard');
+  if(!g || !card) return;
+  const email = authEmail();
+  let inner;
+  if(!authAvailable()){
+    AUTH.error = 'sdk';
+    inner = '<p>로그인 모듈(Firebase SDK)을 불러오지 못했습니다. 네트워크를 확인하고 다시 시도해 주세요.</p>'
+      + '<button class="agbtn" id="agReload">다시 불러오기</button>';
+  } else if(AUTH.denied){
+    inner = '<p>로그인은 됐지만 <b>이 현장에 들어갈 권한이 없는 계정</b>입니다. 허용된 계정으로 다시 로그인해 주세요.</p>'
+      + '<span class="agmail">' + esc(email || '알 수 없는 계정') + '</span>'
+      + '<button class="agbtn" id="agSwitch">다른 Google 계정으로 로그인</button>'
+      + '<button class="agbtn ghost" id="agOut">로그아웃</button>';
+  } else {
+    inner = '<p>현장 무전은 <b>Google 로그인</b>한 사람만 보고 쓸 수 있습니다. 허용된 계정으로 들어와 주세요.</p>'
+      + '<button class="agbtn" id="agSignIn">Google로 로그인</button>'
+      + '<div class="agnote">허용 계정: ' + esc(OWNER_EMAIL) + ' · 가족·동료 계정은 현장주가 <b>인력 현황 → 🔐 접근 권한</b> 에서 추가합니다.</div>';
+  }
+  card.innerHTML = '<div class="aghat">👷</div><h2>노가다 현장 합동 비서실</h2>' + inner;
+  g.hidden = false;
+  const on = (id, fn) => { const b = $('#' + id); if(b) b.addEventListener('click', fn); };
+  on('agSignIn', signInGoogle);
+  on('agSwitch', async () => { await signOutApp(); setTimeout(signInGoogle, 150); });
+  on('agOut', signOutApp);
+  on('agReload', () => location.reload());
+}
+function hideAuthGate(){ const g = $('#authGate'); if(g) g.hidden = true; }
+
+async function signInGoogle(){
+  if(AUTH.busy) return;
+  if(!authAvailable()){ AUTH.error = 'sdk'; showAuthGate(); return; }
+  const fb = window.firebase;
+  const provider = new fb.auth.GoogleAuthProvider();
+  try{ provider.setCustomParameters({ prompt: 'select_account' }); }catch(e){}
+  AUTH.busy = true;
+  const btn = $('#agSignIn'); if(btn){ btn.disabled = true; btn.textContent = 'Google 로그인 중…'; }
+  try{
+    await fb.auth().signInWithPopup(provider);
+  }catch(e){
+    const code = (e && e.code) || '';
+    if(code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request'){
+      /* 사용자가 창을 닫은 경우 — 그대로 둡니다 */
+    } else if(code === 'auth/popup-blocked' || code === 'auth/operation-not-supported-in-this-environment'
+              || code === 'auth/web-storage-unsupported'){
+      try{ await fb.auth().signInWithRedirect(provider); }catch(e2){ toast('로그인 실패: ' + ((e2 && e2.code) || '알 수 없음')); }
+    } else if(code === 'auth/unauthorized-domain'){
+      toast('이 주소는 Firebase 승인된 도메인에 없습니다');
+    } else {
+      toast('로그인 실패: ' + (code || '알 수 없음'));
+    }
+  } finally {
+    AUTH.busy = false;
+    const b2 = $('#agSignIn'); if(b2){ b2.disabled = false; b2.textContent = 'Google로 로그인'; }
+  }
+}
+
+async function signOutApp(){
+  try{ if(authAvailable()) await firebase.auth().signOut(); }catch(e){}
+  AUTH.user = null; AUTH.token = ''; AUTH.tokenAt = 0; AUTH.denied = '';
+  AUTH.allowed = {}; AUTH.allowedLoaded = false;
+  Wire.closeStream();
+  S.conn = 'login';
+  showAuthGate(); render();
+}
+
+/* RTDB가 401/403을 주면(계정이 허용 목록에 없음) 로그인 화면에 이유를 보여 줍니다. */
+function authDenied(){
+  if(!AUTH.required || AUTH.denied) return;
+  AUTH.denied = authEmail() || '이 계정';
+  S.conn = 'denied';
+  Wire.closeStream();
+  try{ $('#connDot').className = 'dot retry'; $('#connTxt').textContent = '접근 권한 없음'; }catch(e){}
+  showAuthGate();
+}
+
+/* 현장주 전용: 허용 이메일 목록(RTDB allowedEmails). 이메일의 '.' 은 ',' 로 저장합니다. */
+function allowedKey(email){ return String(email || '').trim().toLowerCase().replace(/\./g, ','); }
+async function loadAllowedEmails(){
+  if(Wire.mode !== 'rtdb' || !isOwner()) return;
+  try{
+    await Wire.ensureToken();
+    const r = await fetch(Wire.query('/allowedEmails', 't=' + now()));
+    if(!r.ok) return;
+    const v = await r.json();
+    AUTH.allowed = (v && typeof v === 'object') ? v : {};
+    AUTH.allowedLoaded = true;
+    render();
+  }catch(e){}
+}
+async function putAllowedEmail(email, value){
+  const key = allowedKey(email);
+  if(!key) return false;
+  try{
+    await Wire.ensureToken();
+    const r = await fetch(Wire.query('/allowedEmails/' + encodeURIComponent(key)), {
+      method: value ? 'PUT' : 'DELETE',
+      body: value ? 'true' : undefined,
+      headers: value ? { 'Content-Type': 'application/json' } : undefined
+    });
+    if(!r.ok) throw new Error('rules ' + r.status);
+    if(value) AUTH.allowed[key] = true; else delete AUTH.allowed[key];
+    render();
+    return true;
+  }catch(e){ toast('권한 저장 실패'); return false; }
+}
 
 function applyEnvelope(env){
   if(!env || !env.t) return;
@@ -684,6 +877,11 @@ function render(){
   });
 }
 function renderHeader(){
+  const who = $('#authWho');
+  if(who){
+    who.textContent = AUTH.required ? (authEmail() ? '🔐 ' + authEmail() : '🔐 로그인 필요') : '';
+    who.title = AUTH.required ? 'Google 로그인 계정' : '';
+  }
   if(!S.me) return;
   $('#meEmoji').textContent = S.me.emoji;
   $('#meName').textContent = S.me.name;
@@ -893,6 +1091,36 @@ function renderTasks(){
   }));
 }
 
+function authCardHtml(){
+  if(Wire.mode !== 'rtdb'){
+    return '<div class="card authcard" style="margin-top:10px">'
+      + '<div class="sec-title">🔓 접근 모드 <span class="tiny muted" style="font-weight:600">임시 중계</span><span class="line"></span></div>'
+      + '<div class="tiny muted">지금은 <b>ntfy 임시 중계</b> 모드(?db=off)입니다. 로그인 없이 열리지만 채널 이름을 아는 사람은 읽을 수 있으니 민감한 내용은 올리지 마세요.</div>'
+      + '</div>';
+  }
+  const email = authEmail();
+  const rows = Object.keys(AUTH.allowed || {}).sort().map(k => {
+    const addr = k.replace(/,/g, '.');
+    return '<div class="row" style="padding:6px 0;border-bottom:1px dashed rgba(255,195,0,.09)">'
+      + '<div style="flex:1;min-width:0"><div style="font-size:12.5px;word-break:break-all">' + esc(addr) + '</div></div>'
+      + '<button class="chip" data-adelmail="' + esc(k) + '" style="padding:4px 9px;font-size:11px">빼기</button></div>';
+  }).join('');
+  return '<div class="card authcard" style="margin-top:10px">'
+    + '<div class="sec-title">🔐 접근 권한 <span class="tiny muted" style="font-weight:600">Google 로그인</span><span class="line"></span></div>'
+    + '<div class="who">'
+    +   '<div class="av">' + (email ? '🔐' : '🚪') + '</div>'
+    +   '<div style="flex:1;min-width:0"><div style="font-weight:800;font-size:13px;word-break:break-all">' + (email ? esc(email) : '로그인하지 않음') + '</div>'
+    +   '<div class="tiny muted">' + (isOwner() ? '현장주 계정 · 전체 권한' : email ? '허용된 계정' : '로그인이 필요합니다') + '</div></div>'
+    +   (email ? '<button class="chip" id="authOutBtn" style="padding:5px 10px;font-size:11.5px">로그아웃</button>' : '')
+    + '</div>'
+    + (isOwner()
+      ? '<div class="tiny muted" style="margin-top:10px">가족·동료의 Google 이메일을 넣으면 그 계정으로도 무전방을 열 수 있습니다. (목록을 고치는 건 현장주만 가능)</div>'
+        + '<div class="addform"><div class="line"><input type="text" id="allowEmail" placeholder="예: binna@gmail.com"><button class="btn" id="allowAdd" style="width:auto;padding:0 14px">추가</button></div></div>'
+        + (rows || '<div class="tiny muted" style="margin-top:8px">아직 추가한 계정이 없습니다.</div>')
+      : '')
+    + '</div>';
+}
+
 function renderCrew(){
   const el = $('#view-crew');
   const agents = Object.values(S.agents);
@@ -924,7 +1152,7 @@ function renderCrew(){
     ? CFG.rtdbUrl.replace(/\/+$/,'') + '/rooms/' + CFG.room + '.json'
     : 'https://ntfy.sh/' + CFG.ntfyTopic;
   const sample = Wire.mode === 'rtdb'
-    ? 'curl -X PUT "' + CFG.rtdbUrl.replace(/\/+$/,'') + '/rooms/' + CFG.room + '/messages/m-001.json" \\\n  -H "Content-Type: application/json" \\\n  -d \'{"from":"gemini","name":"제미나이","emoji":"🤖","text":"자재 검수 끝냈습니다","ts":' + now() + '}\''
+    ? 'curl -X PUT "' + CFG.rtdbUrl.replace(/\/+$/,'') + '/rooms/' + CFG.room + '/messages/m-001.json' + (AUTH.required ? '?auth=<Google 로그인 토큰>' : '') + '" \\\n  -H "Content-Type: application/json" \\\n  -d \'{"from":"gemini","name":"제미나이","emoji":"🤖","text":"자재 검수 끝냈습니다","ts":' + now() + '}\''
     : 'curl -d \'{"t":"msg","d":{"id":"m-001","from":"gemini","name":"제미나이","emoji":"🤖","text":"자재 검수 끝냈습니다","ts":' + now() + '}}\' \\\n  https://ntfy.sh/' + CFG.ntfyTopic;
 
   el.innerHTML = ''
@@ -934,13 +1162,14 @@ function renderCrew(){
     + groqCardHtml()
     + tavilyCardHtml()
     + cueCardHtml()
+    + authCardHtml()
     + '<button class="btn ghost" id="addAgentBtn" style="width:100%;margin-top:10px">＋ 인력 · 봇 추가</button>'
     + '<button class="btn ghost" id="shareBtn" style="width:100%;margin-top:8px">🔗 현장 초대 링크 복사</button>'
     + '<details class="help"><summary>🔌 외부 봇(제미나이·그록·Cue 등) 연결 방법</summary>'
     +   '<div class="body">'
     +     '<div>현재 채널: <b>' + (Wire.mode === 'rtdb' ? 'Firebase RTDB' : '임시 ntfy 중계') + '</b></div>'
     +     '<div style="margin-top:4px;word-break:break-all">' + esc(ep) + '</div>'
-    +     '<div style="margin-top:10px">아래처럼 한 줄 POST 하면 무전기에 바로 올라옵니다.</div>'
+    +     '<div style="margin-top:10px">' + (AUTH.required ? '현재 이 현장은 <b>Google 로그인 토큰(?auth=)</b>이 있어야 읽고 쓸 수 있습니다. 외부 봇에는 아래처럼 토큰을 붙여 주세요. ' : '') + '아래처럼 한 줄 POST 하면 무전기에 바로 올라옵니다.</div>'
     +     '<pre class="code">' + esc(sample) + '</pre>'
     +     '<div style="margin-top:10px">현장 규칙: <b>agents</b> / <b>messages</b> / <b>tasks</b> 세 갈래만 쓰면 됩니다.</div>'
     +   '</div>'
@@ -951,6 +1180,15 @@ function renderCrew(){
   if($('#tavilyKeyBtn')) $('#tavilyKeyBtn').addEventListener('click', openTavilyKey);
   if($('#cueCopyBtn')) $('#cueCopyBtn').addEventListener('click', ()=> copyText(cuePrompt(), '📋 Cue한테 시킬 문구를 복사했습니다'));
   if($('#cueAddrBtn')) $('#cueAddrBtn').addEventListener('click', ()=> copyText(cuePrompt(), '무전 주소·문구를 복사했습니다'));
+  if($('#authOutBtn')) $('#authOutBtn').addEventListener('click', signOutApp);
+  if($('#allowAdd')) $('#allowAdd').addEventListener('click', async ()=>{
+    const v = ($('#allowEmail').value || '').trim();
+    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)){ toast('이메일 형식이 아닙니다'); return; }
+    if(await putAllowedEmail(v, true)) toast(v + ' 접근 권한을 추가했습니다');
+  });
+  el.querySelectorAll('[data-adelmail]').forEach(b => b.addEventListener('click', ()=>{
+    putAllowedEmail(String(b.dataset.adelmail || '').replace(/,/g, '.'), false);
+  }));
   $('#addAgentBtn').addEventListener('click', openAddAgent);
   $('#shareBtn').addEventListener('click', async ()=>{
     const url = location.origin + location.pathname + '?room=' + encodeURIComponent(CFG.room);
@@ -1041,12 +1279,16 @@ function lastCueTs(){
 }
 function cueCardHtml(){
   const ts = lastCueTs();
+  const locked = AUTH.required;
   return '<div class="card aicard" style="margin-top:10px">'
     + '<div class="sec-title">🕶️ Cue 연동 <span class="tiny muted" style="font-weight:600">외부 첩보반장</span><span class="line"></span></div>'
-    + '<div class="tiny muted" style="margin-bottom:9px">Cue는 진규 님 Cue 앱에서 움직입니다. 아래 문구를 Cue에게 한 번 붙여넣으면 무전방을 읽고, <b>@Cue</b> 가 불릴 때 🕶️ Cue 이름으로 답을 올립니다.</div>'
+    + '<div class="tiny muted" style="margin-bottom:9px">Cue는 진규 님 Cue 앱에서 움직입니다. 아래 문구를 Cue에게 붙여넣으면 무전방을 읽고, <b>@Cue</b> 가 불릴 때 🕶️ Cue 이름으로 답을 올립니다.'
+    +   (locked ? ' <b>보안 적용</b>으로 로그인 열쇠(auth= 토큰)가 문구에 함께 들어가고, 약 1시간마다 다시 복사해야 합니다.' : '')
+    + '</div>'
     + '<div class="stline">'
     +   '<span class="statuspill ' + (ts ? 'st-준비' : 'st-대기중') + '">' + (ts ? '마지막 무전 ' + ago(ts) : '아직 무전 없음') + '</span>'
-    +   '<span class="statuspill st-대기중">' + (Wire.mode === 'rtdb' ? 'Firebase RTDB' : 'ntfy 중계') + '</span></div>'
+    +   '<span class="statuspill st-대기중">' + (Wire.mode === 'rtdb' ? 'Firebase RTDB' : 'ntfy 중계') + '</span>'
+    +   (locked ? '<span class="statuspill st-준비">로그인 전용</span>' : '') + '</div>'
     + '<button class="btn" id="cueCopyBtn" style="width:100%;margin-top:10px">📋 Cue한테 시킬 문구 복사</button>'
     + '</div>';
 }
@@ -1060,9 +1302,16 @@ function cuePrompt(){
       + '답장 올리기: POST https://ntfy.sh/' + CFG.ntfyTopic + ' (body: {"t":"msg","d":{"id":"m-cue-<번호>","from":"cue","name":"Cue","emoji":"🕶️","text":"<답장>","ts":<현재 ms>}})\n'
       + '규칙: @Cue 또는 @cue 가 들어온 최신 무전에만, 한 번만 답장. 한국어 2~4문장, 현장 반장 말투.';
   }
-  const readUrl = base + '/rooms/' + CFG.room + '/messages.json';
+  const authQ = AUTH.token ? ('?auth=' + AUTH.token) : '';
+  const readUrl = base + '/rooms/' + CFG.room + '/messages.json' + authQ;
+  const postUrl  = base + '/rooms/' + CFG.room + '/messages.json' + authQ;
   return [
     "너는 '노가다 현장 합동 비서실' 무전방에 있는 외부 첩보반장 Cue(🕶️)야. 아래 규칙대로만 움직여.",
+    '',
+    '[0] 보안 (2026-11-27 변경)',
+    '이 무전방은 Google 로그인 사용자만 읽고 쓸 수 있어. 아래 주소 끝의 auth= 토큰이 그 열쇠야.',
+    '- 토큰은 약 1시간 뒤 만료돼. 401 Permission denied 가 나오면 사용자가 노가다 비서실 → 인력 현황 → 📋 Cue한테 시킬 문구 복사를 다시 눌러 새 문구를 줄 거야.',
+    '- 토큰을 다른 곳에 올리거나 공유하지 마.',
     '',
     '[1] 무전 읽기 (1분마다, 또는 시킬 때마다)',
     'GET ' + readUrl,
@@ -1074,7 +1323,7 @@ function cuePrompt(){
     '- 부르는 무전이 없으면 아무것도 올리지 마.',
     '',
     '[3] 답장 올리기 (POST)',
-    'POST ' + base + '/rooms/' + CFG.room + '/messages.json',
+    'POST ' + postUrl,
     'Content-Type: application/json',
     '{"id":"m-cue-<겹치지 않는 번호>","from":"cue","name":"Cue","emoji":"🕶️","text":"<답장 내용>","ts":<현재 시각 epoch ms>}',
     '- id는 매번 새로 (m-cue- + 시간 + 임의숫자).',
@@ -1916,6 +2165,46 @@ document.addEventListener('click', e => {
 /* ---------- 시작 ---------- */
 const IMG = 'IMG_SRC_PLACEHOLDER';
 
+let booted = false;
+function onSignedIn(user){
+  AUTH.user = user; AUTH.denied = '';
+  hideAuthGate();
+  if(!booted){ afterAuth(); }
+  else {
+    render();
+    Wire.pull().then(()=> Wire.restartStream()).catch(()=>{});
+  }
+}
+/* 로그인 후(또는 인증이 필요 없는 모드에서) 무전망을 켭니다. 한 번만 실행됩니다. */
+function afterAuth(){
+  if(booted) return;
+  booted = true;
+  render();
+  if(!S.me) openIdentity(true);
+
+  Wire.start().then(()=>{
+    /* 새 참가자 알림 + 상태 공유 */
+    if(Object.keys(S.agents).length) announceState();
+    Wire.push({ t:'hello', ts: now(), d:{} }).catch(()=>{});
+    setTimeout(announceState, 1200);
+    if(isOwner()) loadAllowedEmails();
+  }).catch(()=>{});
+
+  /* 다른 탭/기기 상태 최신화 */
+  setInterval(()=>{ if(Wire.mode === 'rtdb' && S.conn !== 'live') Wire.pull().catch(()=>{}); }, 20000);
+  document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) Wire.pull().catch(()=>{}); });
+  window.addEventListener('beforeunload', writeState);
+
+  /* 로그인 토큰은 1시간 유효 — 20분마다 새로 받아 실시간 스트림을 다시 연결합니다. */
+  if(AUTH.required){
+    setInterval(async ()=>{
+      if(!AUTH.user || AUTH.denied) return;
+      await Wire.ensureToken(true);
+      Wire.restartStream();
+    }, 20 * 60 * 1000);
+  }
+}
+
 (function boot(){
   /* 저장된 상태 복원 */
   const cached = LS.get('state', null);
@@ -1936,19 +2225,27 @@ const IMG = 'IMG_SRC_PLACEHOLDER';
   ensureCoreAgents();
 
   render();
-  if(!S.me) openIdentity(true);
 
-  Wire.start().then(()=>{
-    /* 새 참가자 알림 + 상태 공유 */
-    if(Object.keys(S.agents).length) announceState();
-    Wire.push({ t:'hello', ts: now(), d:{} }).catch(()=>{});
-    setTimeout(announceState, 1200);
-  });
-
-  /* 다른 탭/기기 상태 최신화 */
-  setInterval(()=>{ if(Wire.mode === 'rtdb' && S.conn !== 'live') Wire.pull().catch(()=>{}); }, 20000);
-  document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) Wire.pull().catch(()=>{}); });
-  window.addEventListener('beforeunload', writeState);
+  /* 보안 규칙(2026-11-27~): RTDB 모드에서는 Google 로그인 후에만 무선망을 연결합니다. */
+  if(AUTH.required){
+    showAuthGate();
+    if(authAvailable()){
+      try{ if(!firebase.apps.length) firebase.initializeApp(FIREBASE_CFG); }catch(e){}
+      try{
+        firebase.auth().onAuthStateChanged(async user => {
+          if(!user){
+            AUTH.user = null; AUTH.token = ''; AUTH.tokenAt = 0;
+            showAuthGate(); render(); return;
+          }
+          try{ AUTH.token = await user.getIdToken(); AUTH.tokenAt = now(); }catch(e){ AUTH.token = ''; }
+          onSignedIn(user);
+        });
+        firebase.auth().getRedirectResult().catch(()=>{});
+      }catch(e){ AUTH.error = 'sdk'; showAuthGate(); }
+    }
+    return;
+  }
+  afterAuth();
 })();
 </script>
 </body>

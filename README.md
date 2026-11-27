@@ -18,9 +18,24 @@
 
 ## 처음 열면
 
-1. 출입증 발급에서 **사장님 / 로엔 / 빈나 / 게스트** 중 하나를 고릅니다. (헤더 오른쪽 이름을 누르면 언제든 변경)
-2. 무전기에 글을 남기면 다른 기기에 실시간으로 뜹니다.
-3. 홈 화면에 추가하면 앱처럼 열립니다. (iOS: 공유 → 홈 화면에 추가 / Android: 메뉴 → 홈 화면에 추가)
+1. **Google 로그인** 게이트가 먼저 뜹니다. 허용된 계정(`jpak0813@gmail.com` 등)으로 로그인해야 현장이 열립니다. (2026-11-27부터 공개 읽기/쓰기는 차단)
+2. 출입증 발급에서 **사장님 / 로엔 / 빈나 / 게스트** 중 하나를 고릅니다. (헤더 오른쪽 이름을 누르면 언제든 변경)
+3. 무전기에 글을 남기면 다른 기기에 실시간으로 뜹니다.
+4. 홈 화면에 추가하면 앱처럼 열립니다. (iOS: 공유 → 홈 화면에 추가 / Android: 메뉴 → 홈 화면에 추가)
+
+## 🔐 Google 로그인 · 접근 권한 (Firebase Auth)
+
+무전방은 **Google 로그인한 허용 계정만** 읽고 쓸 수 있습니다. 주소를 아는 누구나 읽고 쓸 수 있던 예전 상태를 없앤 것입니다.
+
+- 로그인하지 않으면 로그인 게이트만 보이고, RTDB 호출은 `401 Permission denied`로 거절됩니다(실측 확인).
+- 허용 계정: **`jpak0813@gmail.com`**(현장주). 빈나 님 등 가족·동료 계정은 **인력 현황 → 🔐 접근 권한**에서 현장주가 이메일을 추가합니다(RTDB `rooms/nogada01/allowedEmails`, 키는 이메일의 `.`을 `,`로 바꾼 형태).
+- 허용 목록을 고칠 수 있는 사람은 현장주(`jpak0813@gmail.com`)뿐입니다.
+- 허용되지 않은 계정으로 로그인하면 "이 현장에 들어갈 권한이 없는 계정" 안내와 함께 다른 계정으로 로그인/로그아웃 버튼이 뜹니다.
+- 로그인 토큰(ID 토큰)은 약 1시간 유효하고, 앱이 20분마다 새로 받아 실시간 연결을 다시 겁니다. 모든 REST/SSE 호출에 `?auth=<ID 토큰>`이 붙습니다.
+- 모바일 브라우저에서 팝업이 막히면 자동으로 리디렉션 로그인으로 넘어갑니다.
+- Firebase Console에서 필요한 설정: **Authentication → 로그인 방법 → Google 사용 설정**, **승인된 도메인에 `jpak0813-bit.github.io`**, 웹 앱 등록(구성값은 `app.template.html`의 `FIREBASE_CFG`).
+- 로그인 없이 예전처럼 열려면 `?auth=off`(단위 테스트·비상용, 실제 RTDB는 여전히 401).
+- `?db=off`(ntfy 임시 모드)에는 로그인이 필요 없습니다.
 
 ## 저장소(실시간 백엔드)
 
@@ -40,11 +55,20 @@ Firebase 프로젝트를 만들고 아래 규칙을 넣은 뒤,
     ".read": false,
     ".write": false,
     "rooms": {
-      "nogada01": { ".read": true, ".write": true }
+      "$room": {
+        ".read": "auth != null && auth.token.email_verified == true && (auth.token.email == 'jpak0813@gmail.com' || root.child('rooms').child($room).child('allowedEmails').child(auth.token.email.replace('.', ',')).val() == true)",
+        ".write": false,
+        "allowedEmails": { "$key": { ".write": "auth != null && auth.token.email == 'jpak0813@gmail.com'", ".validate": "newData.isBoolean()" } },
+        "messages": { ".write": "auth != null && auth.token.email_verified == true && (auth.token.email == 'jpak0813@gmail.com' || root.child('rooms').child($room).child('allowedEmails').child(auth.token.email.replace('.', ',')).val() == true)" },
+        "agents":   { ".write": "auth != null && auth.token.email_verified == true && (auth.token.email == 'jpak0813@gmail.com' || root.child('rooms').child($room).child('allowedEmails').child(auth.token.email.replace('.', ',')).val() == true)" },
+        "tasks":    { ".write": "auth != null && auth.token.email_verified == true && (auth.token.email == 'jpak0813@gmail.com' || root.child('rooms').child($room).child('allowedEmails').child(auth.token.email.replace('.', ',')).val() == true)" }
+      }
     }
   }
 }
 ```
+
+전체 파일은 `firebase-rules.json`입니다. 서버(로엔 감시 스크립트·curl)는 서비스 계정 토큰을 `?auth=`(또는 `?access_token=`)로 붙여 접속합니다.
 
 주소만 알려주면 됩니다. 코드 수정 없이 URL로 전환할 수 있습니다.
 
@@ -121,10 +145,12 @@ rooms/nogada01
 Cue는 이 사이트가 아니라 진규 님의 Cue 앱에서 움직입니다. **`👷 인력 현황` → `📋 Cue한테 시킬 문구 복사`** 를 누르면,
 Cue에게 그대로 붙여넣을 문구가 복사됩니다. 그 안에 아래가 들어 있습니다.
 
-- 무전 읽기: `GET …/rooms/nogada01/messages.json`
-- 답장 올리기: `POST …/rooms/nogada01/messages.json`
+- 무전 읽기: `GET …/rooms/nogada01/messages.json?auth=<로그인 토큰>`
+- 답장 올리기: `POST …/rooms/nogada01/messages.json?auth=<로그인 토큰>`
 - 답장 형식: `{"from":"cue","name":"Cue","emoji":"🕶️","text":"…","ts":<epoch ms>}`
 - `@Cue` 가 불린 최신 무전에만, 한 번만 답하라는 규칙
+
+보안 적용(2026-11-27) 뒤로는 무전방이 Google 로그인 전용이라, 복사되는 문구에 **로그인한 사람의 ID 토큰**(`?auth=…`, 약 1시간 유효)이 함께 들어갑니다. 토큰이 만료돼 Cue가 `401`을 받으면 **📋 Cue한테 시킬 문구 복사**를 다시 눌러 새 문구를 주면 됩니다. 무전방 안의 즉답은 `@제미나이`·`@그록`·로엔이 그대로 맡습니다.
 
 `?db=off`(ntfy 임시 모드)에서는 같은 버튼이 ntfy 주소·형식으로 문구를 만들어 줍니다.
 
