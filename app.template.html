@@ -145,7 +145,12 @@ main{flex:1 1 auto; min-height:0; width:100%; max-width:960px; margin:0 auto; pa
   .actor .av{width:28px;height:28px;font-size:15px}
   .actor .nm{font-size:9px;max-width:60px}
 }
-@media(min-width:760px){.mapwrap{max-width:720px;margin:0 auto}}
+@media(min-width:760px){
+  /* PC: 맵은 최대 640px, 상태판은 줄어들지 않고 페이지가 스크롤(잘린 행 없음) */
+  .mapwrap{max-width:640px;margin:0 auto}
+  .nowcard{flex:0 0 auto}
+  .nowlist{flex:0 0 auto;overflow:visible}
+}
 .mapmeta{display:flex;flex-wrap:wrap;gap:6px}
 .mapmeta .pill{background:var(--panel2);border:1px solid var(--yellow-dim);border-radius:999px;padding:6px 11px;font-size:11.5px;color:var(--muted)}
 /* 모바일: 요약 4칸을 2×2로 고르게 — 줄바꿈으로 한 칸만 떨어지는 어색함 없이 */
