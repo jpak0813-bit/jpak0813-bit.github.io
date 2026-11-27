@@ -111,10 +111,10 @@ main{flex:1 1 auto; min-height:0; width:100%; max-width:960px; margin:0 auto; pa
 .actor{position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:1px;
   background:none;border:0;padding:0;font-family:inherit;cursor:pointer;z-index:3;
   transition:left .8s cubic-bezier(.22,.8,.3,1), top .8s cubic-bezier(.22,.8,.3,1)}
-.actor .av{position:relative;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-size:15px;
+.actor .av{position:relative;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-size:16px;
   background:rgba(14,17,24,.92);border:1.5px solid rgba(255,195,0,.55);
   box-shadow:0 4px 10px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.06)}
-.actor .nm{font-size:8.5px;font-weight:800;letter-spacing:-.3px;line-height:1.5;color:#f4ecdc;white-space:nowrap;
+.actor .nm{font-size:9px;font-weight:800;letter-spacing:-.3px;line-height:1.5;color:#f4ecdc;white-space:nowrap;
   background:rgba(10,13,19,.72);border-radius:6px;padding:0 3px;max-width:66px;overflow:hidden;text-overflow:ellipsis}
 .actor .bd{position:absolute;top:-5px;right:-6px;font-size:9.5px;line-height:1;filter:drop-shadow(0 1px 1px rgba(0,0,0,.7))}
 .actor.idle .av{animation:breathe 3.4s ease-in-out infinite}
@@ -140,10 +140,12 @@ main{flex:1 1 auto; min-height:0; width:100%; max-width:960px; margin:0 auto; pa
 }
 @media(max-width:540px){
   #view-map.on{gap:8px}
+  .mapmeta{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .mapmeta .pill{padding:6px 10px;text-align:center}
   .zone{padding:3px 6px;border-radius:9px;gap:2px}
   .zone .zn{font-size:9px}
-  .actor .av{width:26px;height:26px;font-size:14px}
-  .actor .nm{font-size:8px;max-width:58px}
+  .actor .av{width:28px;height:28px;font-size:15px}
+  .actor .nm{font-size:9px;max-width:60px}
 }
 @media(min-width:760px){.mapwrap{max-width:720px;margin:0 auto}}
 .mapmeta{display:flex;flex-wrap:wrap;gap:6px}
@@ -395,15 +397,15 @@ const AUTH = {
 };
 
 /* 라운지에서 쉬는 자리와 입구 — 대기 중이면 라운지로, 작업 중이면 자기 구역 책상으로 갑니다. */
-const LOUNGE_SEATS = [[54,69],[68,54],[76,62],[83,72],[61,81]];
-const LOUNGE_DOOR  = [[74,52],[79,55],[69,50]];
+const LOUNGE_SEATS = [[57,63],[70,60],[82,64],[63,80],[75,78]];
+const LOUNGE_DOOR  = [[57,51],[63,48],[52,56]];
 /* 스마트 오피스 4구역 — 내부 키(office/work/yard/break)는 RTDB·기존 데이터와 호환되게 그대로 둡니다.
    lx·ly = 지도 위 이름표 위치, spots = 캐릭터가 일할 때 서는 자리(지도 % 좌표). */
 const ZONES = {
   office: { name: '지휘실',      emoji: '🏢', x: 30, y: 41, lx: 19, ly: 19, spots: [[26,41],[35,43]] },
   work:   { name: '리서치 존',   emoji: '💻', x: 70, y: 41, lx: 81, ly: 15, spots: [[58,40],[69,42],[80,39]] },
   yard:   { name: '자료·아카이브', emoji: '🗄️', x: 34, y: 76, lx: 21, ly: 46, spots: [[24,77],[34,80],[45,71]] },
-  break:  { name: '오피스 라운지', emoji: '☕', x: 70, y: 66, lx: 79, ly: 47, spots: LOUNGE_SEATS }
+  break:  { name: '오피스 라운지', emoji: '☕', x: 70, y: 66, lx: 86, ly: 44, spots: LOUNGE_SEATS }
 };
 const STATUSES = ['대기중','작업중','무전대기','식사중','외근','합류대기'];
 const ME_OPTIONS = [
