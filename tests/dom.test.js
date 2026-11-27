@@ -1144,6 +1144,79 @@ function fakeFirebase() {
       /\.chat-scroll\s*\{[^}]*flex:1 1 auto/s.test(css) && !/\.chat-scroll\s*\{[^}]*max-height:min\(52vh/s.test(css));
     ok('layout: 하단 탭바는 본문 흐름의 마지막(fixed 아님) + 안전영역',
       /nav\.tabs\s*\{[^}]*position:relative/s.test(css) && /nav\.tabs\s*\{[^}]*var\(--safe-b\)/s.test(css));
+    ok('layout: 현장맵 탭이 세로 flex로 남는 높이를 채움',
+      /#view-map\.on\s*\{[^}]*display:flex[^}]*flex-direction:column[^}]*flex:1 1 auto/s.test(css));
+    ok('layout: 맵 그림이 4:3 + 어두운 배경(흰 여백 없음)',
+      /\.mapwrap\s*\{[^}]*aspect-ratio:4\/3/s.test(css) && /\.mapwrap\s*\{[^}]*background:#0b0e13/s.test(css)
+      && !/\.mapwrap\s*\{[^}]*background:#e9e2d4/s.test(css));
+    ok('layout: 지금 오피스 상태판이 남는 높이를 채움',
+      /\.nowcard\s*\{[^}]*flex:1 1 auto/s.test(css) && /\.nowlist\s*\{[^}]*flex:1 1 auto/s.test(css));
+    ok('anim: 캐릭터가 left/top 0.8초 transition으로 미끄러짐',
+      /\.actor\s*\{[^}]*transition:left \.8s[^}]*top \.8s/s.test(css));
+    ok('anim: 숨쉬기(breathe)·작업 바운스(workBob)·합류 펄스(joinPulse) 키프레임',
+      /@keyframes breathe/.test(css) && /@keyframes workBob/.test(css) && /@keyframes joinPulse/.test(css));
+    ok('anim: prefers-reduced-motion이면 애니메이션 끔', /prefers-reduced-motion:reduce/.test(css));
+  }
+
+  /* ============ 8) 스마트 오피스 맵 — 움직이는 캐릭터 ============ */
+  {
+    const { dom, w, d } = boot();
+    await wait(160);
+    d.querySelector('[data-me="jingyu"]').click();
+    await wait(60);
+
+    const actors = [...d.querySelectorAll('.actor')];
+    ok('map: 캐릭터 5명이 지도 위에 렌더', actors.length === 5, String(actors.length));
+    ok('map: 캐릭터마다 data-agent·data-state·좌표',
+      actors.every(a => a.dataset.agent && a.dataset.state && a.style.left && a.style.top));
+
+    const roen = d.querySelector('.actor[data-agent="roen"]');
+    ok('map: 로엔(대기중) → idle', roen.classList.contains('idle') && roen.dataset.state === 'idle', roen.className);
+    ok('map: idle 캐릭터는 라운지 쪽(x>50%)에 있음',
+      parseFloat(roen.style.left) > 50 && parseFloat(roen.style.top) > 45, roen.style.left + ' / ' + roen.style.top);
+    ok('map: idle 캐릭터 배지 ☕/💤', ['☕','💤'].includes(roen.querySelector('.bd').textContent));
+
+    const binna = d.querySelector('.actor[data-agent="binna"]');
+    ok('map: 박빈나(합류대기) → joining 펄스', binna.classList.contains('joining') && binna.dataset.state === 'joining', binna.className);
+
+    w.eval("S.agents.roen.status='작업중'; S.agents.roen.zone='work'; render();");
+    await wait(60);
+    const roenWork = d.querySelector('.actor[data-agent="roen"]');
+    ok('map: 작업중으로 바뀌면 working 클래스', roenWork.classList.contains('working'), roenWork.className);
+    ok('map: 작업중 배지 ⚡', roenWork.querySelector('.bd').textContent === '⚡');
+    ok('map: 작업중이면 리서치 존 책상 자리(x 55~85%)로 이동',
+      parseFloat(roenWork.style.left) >= 55 && parseFloat(roenWork.style.left) <= 85, roenWork.style.left);
+    ok('map: 작업중 구역 이름표가 busy', d.querySelector('.zone[data-zone="work"]').classList.contains('busy'));
+
+    w.eval("S.agents.roen.status='대기중'; render();");
+    await wait(60);
+    const roenBack = d.querySelector('.actor[data-agent="roen"]');
+    ok('map: 다시 대기중이면 라운지로 복귀', roenBack.classList.contains('idle') && parseFloat(roenBack.style.left) > 50, roenBack.style.left);
+
+    w.eval("S.agents.cue.status='식사중'; render();");
+    await wait(60);
+    const cueEat = d.querySelector('.actor[data-agent="cue"]');
+    ok('map: 식사중 → eating + 🍽️', cueEat.classList.contains('eating') && cueEat.querySelector('.bd').textContent === '🍽️', cueEat.className);
+
+    d.querySelector('.actor[data-agent="cue"]').click();
+    await wait(40);
+    const toastEl = d.querySelector('#toast');
+    ok('map: 캐릭터를 누르면 상태 토스트',
+      toastEl.classList.contains('on') && toastEl.textContent.includes('Cue') && toastEl.textContent.includes('식사중'), toastEl.textContent);
+    ok('map: 누른 캐릭터가 잠깐 강조(sel)', d.querySelector('.actor[data-agent="cue"]').classList.contains('sel'));
+
+    const zkeys = w.eval('Object.keys(ZONES).join(",")');
+    ok('map: 구역 내부 키는 그대로(office/work/yard/break)', zkeys === 'office,work,yard,break', zkeys);
+    const mapText = d.querySelector('#view-map').textContent;
+    ok('map: 이름표가 스마트 오피스 4구역',
+      ['지휘실','리서치 존','자료·아카이브','오피스 라운지'].every(s => mapText.includes(s)));
+    ok('map: 지금 오피스 상태판', mapText.includes('지금 오피스') && d.querySelector('.nowcard .nowlist'));
+
+    d.querySelector('.zone[data-zone="work"]').click();
+    await wait(40);
+    ok('map: 구역을 누르면 기존 구역 시트가 열림',
+      d.querySelector('#overlay').classList.contains('on') && d.querySelector('#sheet').textContent.includes('리서치 존'));
+    dom.window.close();
   }
 
   console.log(results.join('\n'));

@@ -86,31 +86,79 @@ main{flex:1 1 auto; min-height:0; width:100%; max-width:960px; margin:0 auto; pa
   border-radius:999px;padding:6px 11px;font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:inherit}
 .chip:active{transform:scale(.97)}
 
-/* ---------- 현장 맵 ---------- */
-.mapwrap{position:relative;border-radius:18px;overflow:hidden;border:1px solid var(--yellow-dim);
-  box-shadow:0 18px 40px -20px rgba(0,0,0,.9), inset 0 0 0 1px rgba(255,255,255,.03);background:#e9e2d4}
-.mapwrap img{display:block;width:100%;height:auto}
-.mapwrap:after{content:"";position:absolute;inset:0;pointer-events:none;
-  background:linear-gradient(180deg,rgba(20,18,16,.18),transparent 22%,transparent 78%,rgba(20,18,16,.28))}
-.zone{position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:3px;
-  background:rgba(20,18,16,.86);backdrop-filter:blur(3px);border:1.5px solid var(--yellow);border-radius:13px;
-  padding:6px 9px;color:var(--text);cursor:pointer;font-family:inherit;box-shadow:0 6px 16px -6px rgba(0,0,0,.8);
-  transition:transform .15s ease, box-shadow .15s ease;max-width:46vw}
-.zone:hover{transform:translate(-50%,-50%) scale(1.04)}
-.zone .zn{font-size:11px;font-weight:800;letter-spacing:-.2px;display:flex;align-items:center;gap:3px;white-space:nowrap}
+/* ---------- 스마트 오피스 맵 ---------- */
+/* 현장 맵 탭: 맵 + 상태판이 남는 세로 공간을 함께 채운다(모바일 하단 빈 공간 없음) */
+#view-map.on{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;gap:10px}
+.mapwrap{position:relative;flex:0 0 auto;width:100%;aspect-ratio:4/3;border-radius:18px;overflow:hidden;
+  border:1px solid rgba(255,195,0,.14);background:#0b0e13;
+  box-shadow:0 22px 44px -24px rgba(0,0,0,.95), inset 0 0 0 1px rgba(255,255,255,.03)}
+.mapwrap img{position:absolute;inset:0;display:block;width:100%;height:100%;object-fit:cover}
+.mapwrap:after{content:"";position:absolute;inset:0;pointer-events:none;border-radius:inherit;
+  background:linear-gradient(180deg,rgba(7,9,13,.34),transparent 17%,transparent 83%,rgba(7,9,13,.44))}
+/* 구역 이름표 */
+.zone{position:absolute;transform:translate(-50%,-50%);display:flex;align-items:center;gap:4px;z-index:4;
+  background:rgba(12,15,21,.78);backdrop-filter:blur(5px);border:1px solid rgba(255,195,0,.42);border-radius:11px;
+  padding:4px 8px;color:var(--text);cursor:pointer;font-family:inherit;
+  transition:transform .15s ease, box-shadow .15s ease, border-color .2s ease;max-width:44vw}
+.zone:hover{transform:translate(-50%,-50%) scale(1.05)}
+.zone .zn{font-size:10.5px;font-weight:800;letter-spacing:-.3px;white-space:nowrap;display:flex;align-items:center;gap:3px}
 .zone .za{font-size:12px;line-height:1}
-.zone .zc{position:absolute;top:-7px;right:-7px;background:var(--yellow);color:#191600;border-radius:999px;
-  font-size:10px;font-weight:900;min-width:18px;height:18px;display:grid;place-items:center;padding:0 4px;border:2px solid #141210}
-.zone.busy{border-color:var(--green)}
+.zone .zc{position:absolute;top:-6px;right:-6px;background:var(--yellow);color:#191600;border-radius:999px;
+  font-size:9.5px;font-weight:900;min-width:16px;height:16px;display:grid;place-items:center;padding:0 4px;border:2px solid #0b0e13}
+.zone.busy{border-color:rgba(76,195,138,.75);box-shadow:0 0 0 1px rgba(76,195,138,.22)}
 .zone.busy .zc{background:var(--green);color:#06210f}
-@media(max-width:540px){
-  .zone{padding:4px 6px;border-radius:10px}
-  .zone .zn{font-size:9.5px;gap:2px}
-  .zone .za{font-size:10px}
-  .mapwrap img{min-height:230px;object-fit:cover}
+/* 움직이는 캐릭터 — left/top 이 바뀌면 0.8초에 걸쳐 미끄러지듯 이동 */
+.actor{position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:1px;
+  background:none;border:0;padding:0;font-family:inherit;cursor:pointer;z-index:3;
+  transition:left .8s cubic-bezier(.22,.8,.3,1), top .8s cubic-bezier(.22,.8,.3,1)}
+.actor .av{position:relative;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-size:15px;
+  background:rgba(14,17,24,.92);border:1.5px solid rgba(255,195,0,.55);
+  box-shadow:0 4px 10px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.06)}
+.actor .nm{font-size:8.5px;font-weight:800;letter-spacing:-.3px;line-height:1.5;color:#f4ecdc;white-space:nowrap;
+  background:rgba(10,13,19,.72);border-radius:6px;padding:0 3px;max-width:66px;overflow:hidden;text-overflow:ellipsis}
+.actor .bd{position:absolute;top:-5px;right:-6px;font-size:9.5px;line-height:1;filter:drop-shadow(0 1px 1px rgba(0,0,0,.7))}
+.actor.idle .av{animation:breathe 3.4s ease-in-out infinite}
+.actor.idle .bd{animation:badgeFloat 2.8s ease-in-out infinite}
+.actor.working .av{border-color:var(--green);animation:workBob .72s ease-in-out infinite;
+  box-shadow:0 0 0 2px rgba(76,195,138,.18), 0 4px 10px rgba(0,0,0,.6)}
+.actor.working .bd{animation:badgeFloat 1.5s ease-in-out infinite}
+.actor.eating .bd{animation:badgeFloat 2.4s ease-in-out infinite}
+.actor.radio .av{border-color:rgba(124,198,254,.7);animation:breathe 2.2s ease-in-out infinite}
+.actor.joining .av{border-color:var(--green);animation:joinPulse 1.9s ease-out infinite}
+.actor.joining .bd{animation:badgeFloat 2s ease-in-out infinite}
+.actor.away .av{opacity:.55;border-style:dashed}
+.actor.sel .av{box-shadow:0 0 0 3px rgba(255,195,0,.55), 0 4px 10px rgba(0,0,0,.6)}
+@keyframes breathe{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-2px) scale(1.06)}}
+@keyframes workBob{0%,100%{transform:translateY(0) rotate(-4deg)}50%{transform:translateY(-3px) rotate(4deg)}}
+@keyframes joinPulse{0%{box-shadow:0 0 0 0 rgba(76,195,138,.5), 0 4px 10px rgba(0,0,0,.6)}
+  70%{box-shadow:0 0 0 8px rgba(76,195,138,0), 0 4px 10px rgba(0,0,0,.6)}
+  100%{box-shadow:0 0 0 0 rgba(76,195,138,0), 0 4px 10px rgba(0,0,0,.6)}}
+@keyframes badgeFloat{0%,100%{transform:translateY(0);opacity:.85}50%{transform:translateY(-3px);opacity:1}}
+@media(prefers-reduced-motion:reduce){
+  .actor{transition:none}
+  .actor .av,.actor .bd{animation:none!important}
 }
-.mapmeta{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
-.mapmeta .pill{background:var(--panel2);border:1px solid var(--yellow-dim);border-radius:999px;padding:5px 10px;font-size:11.5px;color:var(--muted)}
+@media(max-width:540px){
+  #view-map.on{gap:8px}
+  .zone{padding:3px 6px;border-radius:9px;gap:2px}
+  .zone .zn{font-size:9px}
+  .actor .av{width:26px;height:26px;font-size:14px}
+  .actor .nm{font-size:8px;max-width:58px}
+}
+@media(min-width:760px){.mapwrap{max-width:720px;margin:0 auto}}
+.mapmeta{display:flex;flex-wrap:wrap;gap:6px}
+.mapmeta .pill{background:var(--panel2);border:1px solid var(--yellow-dim);border-radius:999px;padding:6px 11px;font-size:11.5px;color:var(--muted)}
+/* 지금 오피스(상태판) — 카드가 남는 높이를 채우고 목록 줄이 고르게 늘어난다 */
+.nowcard{display:flex;flex-direction:column;flex:1 1 auto;min-height:208px}
+.nowlist{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;overflow-y:auto;scrollbar-width:thin}
+.nowrow{display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px dashed rgba(255,195,0,.09);min-height:44px}
+.nowrow:last-child{border-bottom:0}
+.nowrow .nav{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;background:var(--panel3);
+  border:1px solid var(--yellow-dim);font-size:16px;flex:0 0 auto}
+.nowrow .nname{font-weight:800;font-size:13.5px;letter-spacing:-.2px}
+.nowrow .nsub{font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.maphint{font-size:10.5px;color:var(--muted2);text-align:center;padding-top:8px}
+@media(max-width:540px){.nowrow{flex:1 1 auto;padding:9px 2px}}
 .mapmeta .pill b{color:var(--text)}
 
 /* ---------- 무전기 ---------- */
@@ -346,11 +394,16 @@ const AUTH = {
   allowed: {}, allowedLoaded: false
 };
 
+/* 라운지에서 쉬는 자리와 입구 — 대기 중이면 라운지로, 작업 중이면 자기 구역 책상으로 갑니다. */
+const LOUNGE_SEATS = [[54,69],[68,54],[76,62],[83,72],[61,81]];
+const LOUNGE_DOOR  = [[74,52],[79,55],[69,50]];
+/* 스마트 오피스 4구역 — 내부 키(office/work/yard/break)는 RTDB·기존 데이터와 호환되게 그대로 둡니다.
+   lx·ly = 지도 위 이름표 위치, spots = 캐릭터가 일할 때 서는 자리(지도 % 좌표). */
 const ZONES = {
-  office: { name: '현장 사무소', emoji: '🏠', x: 29, y: 27 },
-  work:   { name: '작업 구역',  emoji: '🏗️', x: 67, y: 25 },
-  yard:   { name: '자재 야적장', emoji: '🧱', x: 33, y: 66 },
-  break:  { name: '함바 휴게실', emoji: '☕', x: 80, y: 57 }
+  office: { name: '지휘실',      emoji: '🏢', x: 30, y: 41, lx: 19, ly: 19, spots: [[26,41],[35,43]] },
+  work:   { name: '리서치 존',   emoji: '💻', x: 70, y: 41, lx: 81, ly: 15, spots: [[58,40],[69,42],[80,39]] },
+  yard:   { name: '자료·아카이브', emoji: '🗄️', x: 34, y: 76, lx: 21, ly: 46, spots: [[24,77],[34,80],[45,71]] },
+  break:  { name: '오피스 라운지', emoji: '☕', x: 70, y: 66, lx: 79, ly: 47, spots: LOUNGE_SEATS }
 };
 const STATUSES = ['대기중','작업중','무전대기','식사중','외근','합류대기'];
 const ME_OPTIONS = [
@@ -896,38 +949,85 @@ function agentsIn(zone){ return Object.values(S.agents).filter(a => a.zone === z
 function renderMap(){
   const el = $('#view-map');
   const agents = Object.values(S.agents);
+  const seated = {};
+  /* 같은 자리로 몰리는 캐릭터를 한 칸씩 밀어 겹치지 않게 앉힙니다. */
+  function seat(kind, list){
+    const n = (seated[kind] = (seated[kind] || 0) + 1);
+    const s = list[(n - 1) % list.length], extra = Math.floor((n - 1) / list.length);
+    return { i: n - 1, x: Math.min(94, s[0] + extra * 4), y: Math.min(94, s[1] + extra * 5) };
+  }
+  /* 상태에 따른 몸 위치: 작업중 = 자기 구역 책상 / 대기중 = 라운지 / 합류대기 = 라운지 입구 */
+  function poseOf(a){
+    const st = a.status;
+    if(st === '작업중'){
+      const zk = ZONES[a.zone] ? a.zone : 'work', p = seat('w:' + zk, ZONES[zk].spots);
+      return { zone: zk, state: 'working', badge: '⚡', x: p.x, y: p.y, where: ZONES[zk].name + '에서 작업' };
+    }
+    if(st === '무전대기'){
+      const zk = ZONES[a.zone] ? a.zone : 'office', p = seat('r:' + zk, ZONES[zk].spots);
+      return { zone: zk, state: 'radio', badge: '📻', x: p.x, y: p.y, where: ZONES[zk].name + ' · 무전 대기' };
+    }
+    if(st === '식사중'){
+      const p = seat('eat', LOUNGE_SEATS);
+      return { zone: 'break', state: 'eating', badge: '🍽️', x: p.x, y: p.y, where: '라운지에서 식사' };
+    }
+    if(st === '합류대기'){
+      const p = seat('door', LOUNGE_DOOR);
+      return { zone: 'break', state: 'joining', badge: '🙋', x: p.x, y: p.y, where: '라운지 입구에서 대기' };
+    }
+    if(st === '외근'){
+      const p = seat('away', LOUNGE_DOOR);
+      return { zone: 'break', state: 'away', badge: '🚶', x: p.x, y: p.y, where: '외근 중' };
+    }
+    const p = seat('lounge', LOUNGE_SEATS);
+    return { zone: 'break', state: 'idle', badge: p.i % 2 ? '💤' : '☕', x: p.x, y: p.y, where: '라운지에서 휴식' };
+  }
+  const poses = {};
+  agents.forEach(a => { poses[a.id] = poseOf(a); });
+  const zoneCount = {};
+  Object.keys(poses).forEach(id => { const p = poses[id]; zoneCount[p.zone] = (zoneCount[p.zone] || 0) + 1; });
+
   const zones = Object.keys(ZONES).map(k => {
-    const z = ZONES[k], list = agentsIn(k);
-    const busy = list.some(a => a.status === '작업중');
-    const faces = list.slice(0,3).map(a => a.emoji).join('');
-    return '<button class="zone' + (busy ? ' busy' : '') + '" data-zone="' + k + '" style="left:' + z.x + '%;top:' + z.y + '%">'
-      + (list.length ? '<span class="zc">' + list.length + '</span>' : '')
+    const z = ZONES[k], n = zoneCount[k] || 0;
+    const busy = Object.keys(poses).some(id => poses[id].state === 'working' && poses[id].zone === k);
+    return '<button class="zone' + (busy ? ' busy' : '') + '" data-zone="' + k + '" style="left:' + z.lx + '%;top:' + z.ly + '%" aria-label="' + z.name + '">'
+      + (n ? '<span class="zc">' + n + '</span>' : '')
       + '<span class="zn">' + z.emoji + ' ' + z.name + '</span>'
-      + '<span class="za">' + (faces || '<span style="opacity:.45">비어 있음</span>') + '</span>'
       + '</button>';
+  }).join('');
+
+  const actors = agents.map(a => {
+    const p = poses[a.id];
+    return '<button class="actor ' + p.state + '" data-agent="' + esc(a.id) + '" data-state="' + p.state + '"'
+      + ' style="left:' + p.x + '%;top:' + p.y + '%" aria-label="' + esc(a.name + ' · ' + a.status + ' · ' + p.where) + '">'
+      + '<span class="av">' + esc(a.emoji || '🙂') + '<span class="bd">' + p.badge + '</span></span>'
+      + '<span class="nm">' + esc(String(a.name || '').split(' ')[0]) + '</span></button>';
   }).join('');
 
   const working = agents.filter(a => a.status === '작업중').length;
   const openTasks = Object.values(S.tasks).filter(t => t.status !== 'done').length;
 
   el.innerHTML = ''
-    + '<div class="mapwrap"><img src="' + IMG + '" alt="노가다 현장 3D 지도">' + zones + '</div>'
+    + '<div class="mapwrap"><img src="' + IMG + '" alt="스마트 오피스 3D 지도">' + zones + actors + '</div>'
     + '<div class="mapmeta">'
-    +   '<span class="pill">👷 출근 <b>' + agents.length + '명</b></span>'
+    +   '<span class="pill">👥 출근 <b>' + agents.length + '명</b></span>'
     +   '<span class="pill">⚡ 작업중 <b>' + working + '명</b></span>'
     +   '<span class="pill">📋 남은 일 <b>' + openTasks + '건</b></span>'
     +   '<span class="pill">💬 무전 <b>' + visibleMessages().length + '건</b></span>'
     + '</div>'
-    + '<div class="card" style="margin-top:12px">'
-    +   '<div class="sec-title">🛠️ 지금 현장<span class="line"></span></div>'
+    + '<div class="card nowcard">'
+    +   '<div class="sec-title">🛰️ 지금 오피스<span class="line"></span></div>'
+    +   '<div class="nowlist">'
     +   (agents.length ? agents.map(a =>
-          '<div class="row" style="padding:7px 0;border-bottom:1px dashed rgba(255,195,0,.09)">'
-          + '<div style="width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:var(--panel3);font-size:15px">' + a.emoji + '</div>'
-          + '<div style="flex:1;min-width:0"><div style="font-weight:800;font-size:13.5px">' + esc(a.name) + '</div>'
-          + '<div class="tiny muted">' + esc(a.role || '') + ' · ' + (ZONES[a.zone] ? ZONES[a.zone].name : '미배치') + '</div></div>'
+          '<div class="nowrow" data-watch="' + esc(a.id) + '">'
+          + '<div class="nav">' + esc(a.emoji || '🙂') + '</div>'
+          + '<div style="flex:1;min-width:0"><div class="nname">' + esc(a.name) + '</div>'
+          + '<div class="nsub">' + esc(a.role || '') + ' · ' + esc(poses[a.id].where) + '</div></div>'
           + '<span class="statuspill st-' + esc(a.status) + '">' + esc(a.status) + '</span>'
           + '</div>').join('')
         : '<div class="empty">아직 출근한 인력이 없습니다. 인력 현황에서 추가하세요.</div>')
+    +   '</div>'
+    +   '<div class="maphint">구역을 누르면 인력 이동 · 캐릭터를 누르면 상태 확인</div>'
     + '</div>';
 }
 
@@ -2157,7 +2257,17 @@ function switchTab(t){
 }
 document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', ()=> switchTab(b.dataset.tab)));
 $('#meBtn').addEventListener('click', ()=> openIdentity(false));
+/* 지도 위 캐릭터를 누르면 상태 토스트 + 잠깐 강조 */
+function tapActor(id, el){
+  const a = S.agents[id];
+  if(!a) return;
+  if(el){ el.classList.add('sel'); setTimeout(()=> el.classList.remove('sel'), 1400); }
+  const zname = ZONES[a.zone] ? ZONES[a.zone].name : '미배치';
+  toast((a.emoji || '🙂') + ' ' + a.name + ' · ' + a.status + ' · ' + zname);
+}
 document.addEventListener('click', e => {
+  const ac = e.target.closest('[data-agent]');
+  if(ac){ tapActor(ac.dataset.agent, ac); return; }
   const z = e.target.closest('[data-zone]');
   if(z) openZone(z.dataset.zone);
 });
