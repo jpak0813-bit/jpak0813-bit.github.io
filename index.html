@@ -583,7 +583,10 @@ function renderMap(){
 
 function renderChat(){
   const el = $('#view-chat');
-  const list = Object.values(S.messages).sort((a,b)=> (a.ts||0)-(b.ts||0)).slice(-200);
+  let list = Object.values(S.messages).sort((a,b)=> (a.ts||0)-(b.ts||0));
+  /* 실제 무전이 오가면 로컬 기본 환영문은 숨깁니다(중복 방지) */
+  if(list.some(m => m.id !== 'm-welcome-01')) list = list.filter(m => m.id !== 'm-welcome-01');
+  list = list.slice(-200);
   const wasNear = (()=>{ const sc = $('#chatScroll'); return !sc || (sc.scrollHeight - sc.scrollTop - sc.clientHeight < 80); })();
 
   const html = list.length ? list.map(m => {
