@@ -154,8 +154,13 @@ function boot(opts = {}) {
 
     ok('gemini called once', geminiCalls.length === 1, 'calls=' + geminiCalls.length);
     const call = geminiCalls[0] || { url: '', body: {} };
-    ok('model gemini-2.5-flash', call.url.includes('/models/gemini-2.5-flash:generateContent'));
+    ok('model gemini-3.5-flash-lite', call.url.includes('/models/gemini-3.5-flash-lite:generateContent'));
     ok('key in request url', call.url.includes('key=' + encodeURIComponent(FAKE_KEY)));
+    const gen3 = call.body && call.body.generationConfig || {};
+    ok('3.x payload: 샘플링 파라미터 없음', gen3.temperature === undefined && gen3.topP === undefined && gen3.topK === undefined,
+      JSON.stringify(gen3));
+    ok('3.x payload: thinkingConfig 없음', gen3.thinkingConfig === undefined, JSON.stringify(gen3));
+    ok('3.x payload: maxOutputTokens 있음', typeof gen3.maxOutputTokens === 'number' && gen3.maxOutputTokens > 0, JSON.stringify(gen3));
     const sys = call.body && call.body.systemInstruction && call.body.systemInstruction.parts[0].text || '';
     ok('persona: 설계/기술 자문', sys.includes('설계·기술 자문') || sys.includes('설계/기술 자문'));
     ok('persona: 현장 말투 지시', sys.includes('현장 반장'));
@@ -167,7 +172,7 @@ function boot(opts = {}) {
     ok('agent status 대기중 복귀', published.some(p => p.t === 'agent' && p.d.id === 'gemini' && p.d.status === '대기중'));
     const reply = published.filter(p => p.t === 'msg' && p.d.from === 'gemini').pop();
     ok('reply posted as gemini', !!reply && reply.d.name === '제미나이' && reply.d.emoji === '🤖');
-    ok('reply carries model', !!reply && reply.d.model === 'gemini-2.5-flash');
+    ok('reply carries model', !!reply && reply.d.model === 'gemini-3.5-flash-lite');
     ok('reply rendered in chat', d.querySelector('#view-chat').textContent.includes('거푸집은 위에서부터'));
     ok('AI tag rendered', !!d.querySelector('.msg.ai .tagai'));
     ok('typing indicator gone', !d.querySelector('.msg.typing'));
@@ -175,15 +180,15 @@ function boot(opts = {}) {
     dom.window.close();
   }
 
-  /* ============ 4) 모델 폴백(404: 2.5-flash → 2.5-flash-lite → 2.0-flash) ============ */
+  /* ============ 4) 모델 폴백(404: 3.5-flash-lite → 3.6-flash → 3.8-flash) ============ */
   {
     const { dom, w, d, published, geminiCalls } = boot({
       geminiResponder: (call) => {
-        if (/\/models\/gemini-2\.5-flash:generateContent/.test(call.url)) {
-          return { ok: false, status: 404, json: async () => ({ error: { code: 404, status: 'NOT_FOUND', message: 'models/gemini-2.5-flash is not found for API version v1beta' } }) };
+        if (call.url.includes('gemini-3.5-flash-lite')) {
+          return { ok: false, status: 404, json: async () => ({ error: { code: 404, status: 'NOT_FOUND', message: 'models/gemini-3.5-flash-lite is not found for API version v1beta' } }) };
         }
-        if (call.url.includes('gemini-2.5-flash-lite')) {
-          return { ok: false, status: 404, json: async () => ({ error: { code: 404, status: 'NOT_FOUND', message: 'models/gemini-2.5-flash-lite is not found for API version v1beta' } }) };
+        if (call.url.includes('gemini-3.6-flash')) {
+          return { ok: false, status: 404, json: async () => ({ error: { code: 404, status: 'NOT_FOUND', message: 'models/gemini-3.6-flash is not found for API version v1beta' } }) };
         }
         return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: '폴백 모델이 답했습니다.' }] } }] }) };
       }
@@ -198,14 +203,13 @@ function boot(opts = {}) {
     d.querySelector('#sendBtn').click();
     await wait(1400);
     const seq = geminiCalls.map(c => (c.url.match(/models\/([^:]+)/) || [])[1]);
-    ok('404: fallback order 2.5-flash > 2.5-flash-lite > 2.0-flash',
-      seq.join(' > ') === 'gemini-2.5-flash > gemini-2.5-flash-lite > gemini-2.0-flash', seq.join(' > '));
+    ok('404: fallback order 3.5-flash-lite > 3.6-flash > 3.8-flash',
+      seq.join(' > ') === 'gemini-3.5-flash-lite > gemini-3.6-flash > gemini-3.8-flash', seq.join(' > '));
     const reply = published.filter(p => p.t === 'msg' && p.d.from === 'gemini').pop();
-    ok('404: fallback reply posted', !!reply && reply.d.text.includes('폴백 모델') && reply.d.model === 'gemini-2.0-flash');
-    const gen25 = geminiCalls[0].body.generationConfig || {};
-    const gen20 = geminiCalls[2].body.generationConfig || {};
-    ok('2.5 요청에는 thinkingBudget:0', !!(gen25.thinkingConfig && gen25.thinkingConfig.thinkingBudget === 0), JSON.stringify(gen25));
-    ok('2.0 요청에는 thinkingConfig 없음', gen20.thinkingConfig === undefined, JSON.stringify(gen20));
+    ok('404: fallback reply posted', !!reply && reply.d.text.includes('폴백 모델') && reply.d.model === 'gemini-3.8-flash');
+    const gen8 = geminiCalls[2].body.generationConfig || {};
+    ok('3.8 요청에도 샘플링·thinkingConfig 없음',
+      gen8.temperature === undefined && gen8.topP === undefined && gen8.thinkingConfig === undefined, JSON.stringify(gen8));
     dom.window.close();
   }
 
@@ -231,7 +235,7 @@ function boot(opts = {}) {
     await wait(2000);
     const seq = geminiCalls.map(c => (c.url.match(/models\/([^:]+)/) || [])[1]);
     ok('503: 모든 모델을 차례로 시도',
-      seq.join(' > ') === 'gemini-2.5-flash > gemini-2.5-flash-lite > gemini-2.0-flash > gemini-flash-latest', seq.join(' > '));
+      seq.join(' > ') === 'gemini-3.5-flash-lite > gemini-3.6-flash > gemini-3.8-flash > gemini-2.5-flash > gemini-flash-latest', seq.join(' > '));
     const reply = published.filter(p => p.t === 'msg' && p.d.from === 'gemini').pop();
     ok('503: 끝 모델 답장 게시', !!reply && reply.d.text.includes('503 뚫고') && reply.d.model === 'gemini-flash-latest',
       reply && reply.d.text);
@@ -244,7 +248,7 @@ function boot(opts = {}) {
   {
     const { dom, w, d, published, geminiCalls } = boot({
       geminiResponder: (call) => {
-        if (/\/models\/gemini-2\.5-flash:generateContent/.test(call.url)) {
+        if (call.url.includes('gemini-3.5-flash-lite')) {
           return { ok: false, status: 429, json: async () => ({ error: { code: 429, status: 'RESOURCE_EXHAUSTED', message: 'You exceeded your current quota' } }) };
         }
         return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: '다음 모델이 답했습니다.' }] } }] }) };
@@ -260,12 +264,12 @@ function boot(opts = {}) {
     d.querySelector('#sendBtn').click();
     await wait(1000);
     const reply = published.filter(p => p.t === 'msg' && p.d.from === 'gemini').pop();
-    ok('429: 다음 모델로 넘어가 답장', geminiCalls.length === 2 && !!reply && reply.d.model === 'gemini-2.5-flash-lite'
+    ok('429: 다음 모델로 넘어가 답장', geminiCalls.length === 2 && !!reply && reply.d.model === 'gemini-3.6-flash'
       && reply.d.text.includes('다음 모델이'), (reply && reply.d.model) || 'none');
     dom.window.close();
   }
 
-  /* ============ 4-D) 4개 모델이 모두 503 → 안내 한 번만, 멈추지 않음 ============ */
+  /* ============ 4-D) 모든 모델이 503 → 안내 한 번만, 멈추지 않음 ============ */
   {
     const { dom, w, d, published, geminiCalls } = boot({
       geminiResponder: () => ({ ok: false, status: 503, json: async () => ({ error: { code: 503, status: 'UNAVAILABLE', message: 'This model is currently experiencing high demand.' } }) })
@@ -280,7 +284,7 @@ function boot(opts = {}) {
     d.querySelector('#sendBtn').click();
     await wait(2000);
     const errs = published.filter(p => p.t === 'msg' && p.d.from === 'gemini');
-    ok('all-503: 4모델 모두 시도', geminiCalls.length === 4, 'calls=' + geminiCalls.length);
+    ok('all-503: 5모델 모두 시도', geminiCalls.length === 5, 'calls=' + geminiCalls.length);
     ok('all-503: 안내 무전 1건', errs.length === 1, 'msgs=' + errs.length);
     ok('all-503: 503·재시도 안내 문구', !!errs[0] && errs[0].d.error === true && /503/.test(errs[0].d.text) && /다시/.test(errs[0].d.text),
       errs[0] && errs[0].d.text);
@@ -288,11 +292,11 @@ function boot(opts = {}) {
     dom.window.close();
   }
 
-  /* ============ 4-E) 망 지연·연결 실패도 다음 모델로 계속 ============ */
+  /* ============ 4-E) 망 지연·연결 실패도 다음 모델로 계속 (+ 2.5 요청 파라미터) ============ */
   {
     const { dom, w, d, published, geminiCalls } = boot({
       geminiResponder: (call) => {
-        if (call.url.includes('gemini-2.0-flash')) {
+        if (call.url.includes('gemini-2.5-flash')) {
           return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: '망 지연 뚫고 답했습니다.' }] } }] }) };
         }
         throw Object.assign(new Error('network down'), { name: 'TypeError' });
@@ -308,19 +312,22 @@ function boot(opts = {}) {
     d.querySelector('#sendBtn').click();
     await wait(1400);
     const reply = published.filter(p => p.t === 'msg' && p.d.from === 'gemini').pop();
-    ok('net-error: 다음 모델로 계속 시도', geminiCalls.length === 3, 'calls=' + geminiCalls.length);
-    ok('net-error: 답장 게시', !!reply && reply.d.text.includes('망 지연 뚫고') && reply.d.model === 'gemini-2.0-flash', reply && reply.d.text);
+    ok('net-error: 다음 모델로 계속 시도', geminiCalls.length === 4, 'calls=' + geminiCalls.length);
+    ok('net-error: 답장 게시', !!reply && reply.d.text.includes('망 지연 뚫고') && reply.d.model === 'gemini-2.5-flash', reply && reply.d.text);
+    const gen25 = (geminiCalls[3] && geminiCalls[3].body.generationConfig) || {};
+    ok('2.5 요청에는 thinkingBudget:0', !!(gen25.thinkingConfig && gen25.thinkingConfig.thinkingBudget === 0), JSON.stringify(gen25));
+    ok('2.5 요청에는 temperature 유지', gen25.temperature === 0.85, JSON.stringify(gen25));
     dom.window.close();
   }
 
-  /* ============ 4-F) 400 파라미터 거절(thinkingConfig 모름)도 다음 모델로 ============ */
+  /* ============ 4-F) 400 파라미터 거절도 다음 모델로 ============ */
   {
     const { dom, w, d, published, geminiCalls } = boot({
       geminiResponder: (call) => {
-        if (call.url.includes('gemini-2.5-flash')) {
+        if (call.url.includes('gemini-3.5-flash-lite')) {
           return { ok: false, status: 404, json: async () => ({ error: { code: 404, status: 'NOT_FOUND', message: 'model not found' } }) };
         }
-        if (call.url.includes('gemini-2.0-flash')) {
+        if (call.url.includes('gemini-3.6-flash')) {
           return { ok: false, status: 400, json: async () => ({ error: { code: 400, status: 'INVALID_ARGUMENT', message: 'Unknown name "thinkingConfig": Cannot find field.' } }) };
         }
         return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: '파라미터 거절 뚫고 답했습니다.' }] } }] }) };
@@ -336,8 +343,35 @@ function boot(opts = {}) {
     d.querySelector('#sendBtn').click();
     await wait(2000);
     const reply = published.filter(p => p.t === 'msg' && p.d.from === 'gemini').pop();
-    ok('400 파라미터: 다음 모델로 넘어가 답장', !!reply && reply.d.model === 'gemini-flash-latest'
+    ok('400 파라미터: 다음 모델로 넘어가 답장', !!reply && reply.d.model === 'gemini-3.8-flash'
       && reply.d.text.includes('파라미터 거절'), (reply && reply.d.model) || 'none');
+    dom.window.close();
+  }
+
+  /* ============ 4-G) 200인데 본문이 빈 응답(MAX_TOKENS)도 다음 모델로 ============ */
+  {
+    const { dom, w, d, published, geminiCalls } = boot({
+      geminiResponder: (call) => {
+        if (call.url.includes('gemini-3.5-flash-lite')) {
+          return { ok: true, status: 200, json: async () => ({ candidates: [{ content: {}, finishReason: 'MAX_TOKENS' }], usageMetadata: { thoughtsTokenCount: 640 } }) };
+        }
+        return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: '빈 응답 뚫고 답했습니다.' }] } }] }) };
+      }
+    });
+    await wait(160);
+    d.querySelector('[data-me="jingyu"]').click();
+    await wait(30);
+    w.localStorage.setItem('nogada_gemini_api_key', FAKE_KEY);
+    d.querySelector('.tab[data-tab="chat"]').click();
+    await wait(30);
+    d.querySelector('#msgInput').value = '@제미나이 빈 응답 테스트';
+    d.querySelector('#sendBtn').click();
+    await wait(1400);
+    const seq = geminiCalls.map(c => (c.url.match(/models\/([^:]+)/) || [])[1]);
+    ok('빈 응답: 다음 모델로 넘어감', seq.join(' > ') === 'gemini-3.5-flash-lite > gemini-3.6-flash', seq.join(' > '));
+    const reply = published.filter(p => p.t === 'msg' && p.d.from === 'gemini').pop();
+    ok('빈 응답: 다음 모델 답장 게시', !!reply && reply.d.text.includes('빈 응답 뚫고') && reply.d.model === 'gemini-3.6-flash'
+      && reply.d.error !== true, (reply && reply.d.text) || 'none');
     dom.window.close();
   }
 

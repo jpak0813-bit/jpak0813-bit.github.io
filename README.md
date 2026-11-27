@@ -73,8 +73,9 @@ rooms/nogada01
 
 - 키는 **그 브라우저의 localStorage(`nogada_gemini_api_key`)에만** 저장됩니다. 공개 GitHub 코드나 Firebase DB에는 들어가지 않습니다.
 - 그래서 **기기마다(휴대폰·PC) 한 번씩** 넣어야 합니다. 브라우저 데이터를 지우면 다시 넣어야 합니다.
-- 모델은 `gemini-2.5-flash` → `gemini-2.5-flash-lite` → `gemini-2.0-flash` → `gemini-flash-latest` 순으로 자동 재시도합니다.
-  첫 모델이 **503(모델 수요 폭주)·429(한도)·404(키에 없는 모델)·5xx·응답 지연**으로 막히면 다음 모델로 넘어가 답을 찾고, 4개가 모두 막혔을 때만 무전기에 안내를 올립니다.
+- 모델은 `gemini-3.5-flash-lite` → `gemini-3.6-flash` → `gemini-3.8-flash` → `gemini-2.5-flash` → `gemini-flash-latest` 순으로 자동 재시도합니다.
+  Gemini 3.x에는 샘플링 파라미터(`temperature`·`topP`·`topK`)와 `thinkingConfig`를 보내지 않고 `maxOutputTokens`만 보냅니다(400 방지, thinking 토큰까지 이 한도에 포함되므로 2048). `thinkingConfig(thinkingBudget:0)`는 2.5 계열에만 넣습니다.
+  첫 모델이 **503(모델 수요 폭주)·429(한도)·404(키에 없는 모델)·5xx·응답 지연·빈 응답**으로 막히면 다음 모델로 넘어가 답을 찾고, 모든 모델이 막혔을 때만 무전기에 안내를 올립니다.
 - 키가 없거나 거부되면 무전기 위에 안내 배너가 뜨고, `키 넣기` 버튼으로 바로 설정할 수 있습니다.
 - 답을 만드는 동안 제미나이 상태가 `작업중`(작업 구역)으로 바뀌었다가 `대기중`으로 돌아옵니다.
 

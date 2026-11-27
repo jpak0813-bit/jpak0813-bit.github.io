@@ -308,14 +308,17 @@ const WELCOME = {
    소스 코드·GitHub·Firebase RTDB에는 절대 넣지 않습니다. */
 const GEMINI_KEY_LS = 'nogada_gemini_api_key';
 /* 앞에서부터 차례로 시도합니다. 503(모델 과부하)·429(한도)·404(키에 없는 모델)·
-   5xx·응답 지연이 나면 다음 모델로 자동으로 넘어갑니다.
-   thinkingConfig(thinkingBudget:0)는 2.5 계열에만 넣습니다 — 2.0 계열은 이 필드를
-   받으면 400으로 거절합니다. 그래서 2.0·latest 항목에는 thinking 플래그를 두지 않습니다. */
+   5xx·응답 지연·빈 응답이 나면 다음 모델로 자동으로 넘어갑니다.
+   Gemini 3.x(3.5-flash-lite·3.6-flash·3.8-flash·flash-latest)는 temperature·topP·topK와
+   thinkingConfig(thinkingBudget)를 받지 않습니다(400 또는 무시). 그래서 3.x 요청에는
+   maxOutputTokens만 담은 generationConfig를 보내고, 샘플링·thinking 설정은 2.5 계열에만 넣습니다.
+   3.x는 thinking 토큰도 maxOutputTokens에 포함되므로(본문까지 여유를 둠) 넉넉히 잡습니다. */
 const GEMINI_MODELS = [
-  { id:'gemini-2.5-flash', thinking:true },
-  { id:'gemini-2.5-flash-lite', thinking:true },
-  { id:'gemini-2.0-flash' },
-  { id:'gemini-flash-latest' }
+  { id:'gemini-3.5-flash-lite', family:3 },   /* 가장 빠르고 무료 한도가 넉넉한 3.x 경량 */
+  { id:'gemini-3.6-flash',      family:3 },
+  { id:'gemini-3.8-flash',      family:3 },   /* 현재 가장 똑똑한 Flash */
+  { id:'gemini-2.5-flash',      family:25, thinking:true },
+  { id:'gemini-flash-latest',   family:3 }
 ];
 const GEMINI_RETRY_STATUS = [404, 429, 500, 502, 503, 504];
 const GEMINI_RETRY_DELAY_MS = 250;      // 모델 사이 재시도 간격
@@ -999,8 +1002,12 @@ function geminiSleep(ms){
 
 /* 모델 하나를 호출합니다. 응답 지연은 AbortController로 끊습니다. */
 async function geminiCallModel(model, promptText, key, timeoutMs){
-  const gen = { temperature: 0.85, maxOutputTokens: 1200, topP: 0.95 };
-  if(model.thinking) gen.thinkingConfig = { thinkingBudget: 0 }; /* 2.0 계열에는 넣지 않는다(400 방지) */
+  /* 3.x: 샘플링 파라미터·thinkingConfig 없이 maxOutputTokens만. thinking이 기본으로 켜져 있어
+     그 토큰까지 같은 한도에서 나가므로 2048로 잡는다(작으면 본문이 빈 채로 끝난다). */
+  const gen = model.family === 3
+    ? { maxOutputTokens: 2048 }
+    : { temperature: 0.85, maxOutputTokens: 1200, topP: 0.95 };
+  if(model.thinking) gen.thinkingConfig = { thinkingBudget: 0 }; /* 2.5 계열에만 */
   const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + model.id
     + ':generateContent?key=' + encodeURIComponent(key);
 
@@ -1031,13 +1038,13 @@ async function geminiCallModel(model, promptText, key, timeoutMs){
   }
 }
 
-/* 503·429·404·5xx·응답 지연이면 다음 모델로 넘어가 계속 시도합니다.
-   4개 모델이 모두 막히면 그때 한 번만 사용자에게 알립니다. */
+/* 503·429·404·5xx·응답 지연·빈 응답이면 다음 모델로 넘어가 계속 시도합니다.
+   모든 모델이 막히면 그때 한 번만 사용자에게 알립니다. */
 async function geminiFetch(promptText, key){
   const started = Date.now();
   const tried = [];
   let lastModelErr = '';
-  let sawBusy = false, sawQuota = false, sawTimeout = false, sawNetwork = false, sawNotFound = false;
+  let sawBusy = false, sawQuota = false, sawTimeout = false, sawNetwork = false, sawNotFound = false, sawEmpty = false;
 
   for(let i = 0; i < GEMINI_MODELS.length; i++){
     const model = GEMINI_MODELS[i];
@@ -1050,8 +1057,14 @@ async function geminiFetch(promptText, key){
       const parts = (cand && cand.content && cand.content.parts) || [];
       const out = parts.map(p => (p && p.text) ? p.text : '').join('').trim();
       if(out) return { text: out, model: model.id, tried: tried };
+      /* 200인데 본문이 비었다 = thinking이 maxOutputTokens를 다 쓴 경우(MAX_TOKENS)·안전 차단 등
+         → 다음 모델로 넘어간다 */
       const why = (cand && cand.finishReason) || (res.data.promptFeedback && res.data.promptFeedback.blockReason) || '';
-      throw { kind: 'empty', userMessage: '🤖 제미나이 답이 비어 있습니다' + (why ? ' (' + why + ')' : '') + '. 질문을 조금 바꿔 다시 불러주세요.' };
+      tried.push(model.id);
+      sawEmpty = true;
+      lastModelErr = '본문 없음' + (why ? '(' + why + ')' : '');
+      if(i < GEMINI_MODELS.length - 1) await geminiSleep(GEMINI_RETRY_DELAY_MS);
+      continue;
     }
 
     if(!res.r){
@@ -1103,6 +1116,9 @@ async function geminiFetch(promptText, key){
   }
   if(sawNotFound){
     throw { kind: 'model', userMessage: '🤖 쓸 수 있는 제미나이 모델을 찾지 못했습니다. Gemini API 키에서 사용 가능한 모델을 확인해 주세요.' + detail };
+  }
+  if(sawEmpty){
+    throw { kind: 'empty', userMessage: '🤖 제미나이 답이 비어 있습니다. 질문을 조금 바꿔 다시 불러주세요.' + detail };
   }
   throw { kind: 'api', userMessage: '🤖 제미나이 호출이 실패했습니다. 잠시 뒤 다시 불러주세요.' + detail };
 }
@@ -1164,7 +1180,7 @@ function openGeminiKey(){
     +   '• 키는 <b>이 브라우저(localStorage)</b>에만 저장됩니다. GitHub 공개 코드와 Firebase DB에는 올라가지 않습니다.<br>'
     +   '• 휴대폰·PC 각각 처음 한 번씩 넣어주세요.<br>'
     +   '• 발급: aistudio.google.com/apikey → Create API key<br>'
-    +   '• 모델: gemini-2.5-flash (안되면 2.0-flash · flash-latest 로 자동 재시도)'
+    +   '• 모델: gemini-3.5-flash-lite (안되면 3.6-flash · 3.8-flash · 2.5-flash · flash-latest 로 자동 재시도)'
     + '</div>'
   );
   $('#gkSave').addEventListener('click', ()=>{
