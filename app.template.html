@@ -913,7 +913,7 @@ function geminiCardHtml(){
     : '<span class="statuspill st-대기중">대기중</span>';
   return '<div class="card aicard" style="margin-top:10px">'
     + '<div class="sec-title">🤖 제미나이 즉답<span class="line"></span></div>'
-    + '<div class="tiny muted" style="margin-bottom:9px">무전기에 <b>@제미나이</b> 라고 부르면 설계/기술 자문으로 바로 답합니다.</div>'
+    + '<div class="tiny muted" style="margin-bottom:9px">무전기에 <b>@제미나이</b> 라고 부르면 최신 정보까지 <b>실시간 구글 검색</b>으로 찾아 바로 답합니다.</div>'
     + '<div class="stline">' + st
     +   '<span class="statuspill ' + (key ? 'st-준비' : 'st-대기중') + '">' + (key ? '키 등록됨 · ' + esc(maskKey(key)) : '키 없음') + '</span></div>'
     + '<button class="btn" id="geminiKeyBtn" style="width:100%;margin-top:10px">🔑 제미나이 API 키 설정</button>'
