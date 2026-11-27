@@ -3,6 +3,7 @@
  *   jsdom으로 index.html을 실제로 띄우고, 네트워크(ntfy/Firebase/Gemini)는 가짜로 바꿔서 검사합니다.
  *   - 기본 앱 동작(맵·무전기·작업일지·인력현황)
  *   - @제미나이 즉답: 키 없음 안내 / 키 저장(localStorage) / 정상 호출 / 모델 폴백(404·503·429·망 지연) / 키 오류
+ *   - @그록(Groq) 즉답: 칩·키 없음 안내 / localStorage 키 / OpenAI 호환 페이로드·Bearer 헤더 / 모델 폴백 / 키 오류
  *   - 키가 소스·Firebase 페이로드에 절대 섞이지 않는지
  *   - @Cue 인력·칩·"Cue한테 시킬 문구 복사"
  */
@@ -12,6 +13,7 @@ const path = require('path');
 
 const HTML = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 const FAKE_KEY = 'AIzaSyTESTKEY_do_not_leak_1234567890';
+const FAKE_GROQ_KEY = 'gsk_TESTKEY_do_not_leak_1234567890abcdef';
 const FB = 'https://pickle-nogada-office-default-rtdb.asia-southeast1.firebasedatabase.app';
 
 const wait = ms => new Promise(r => setTimeout(r, ms));
@@ -21,10 +23,15 @@ const ok = (name, cond, extra = '') => results.push((cond ? 'PASS' : 'FAIL') + '
 function boot(opts = {}) {
   const published = [];       // 앱이 밖으로 내보낸 모든 페이로드(ntfy/Firebase)
   const geminiCalls = [];     // Gemini API 호출 기록
+  const groqCalls = [];       // Groq API 호출 기록
   const copied = [];
   const geminiResponder = opts.geminiResponder || (() => ({
     ok: true, status: 200,
     json: async () => ({ candidates: [{ content: { parts: [{ text: '거푸집은 위에서부터 한 단씩 내려오면 됩니다. 안전대 먼저 겁니다.' }] } }] })
+  }));
+  const groqResponder = opts.groqResponder || (() => ({
+    ok: true, status: 200,
+    json: async () => ({ choices: [{ index: 0, message: { role: 'assistant', content: '거푸집은 위에서부터 한 단씩 내려오면 됩니다. 안전대 먼저 겁니다.' }, finish_reason: 'stop' }] })
   }));
 
   const dom = new JSDOM(HTML, {
@@ -38,6 +45,11 @@ function boot(opts = {}) {
           const call = { url: u, body: opt.body ? JSON.parse(opt.body) : null };
           geminiCalls.push(call);
           return geminiResponder(call, geminiCalls.length);
+        }
+        if (u.includes('api.groq.com')) {
+          const call = { url: u, headers: opt.headers || {}, body: opt.body ? JSON.parse(opt.body) : null };
+          groqCalls.push(call);
+          return groqResponder(call, groqCalls.length);
         }
         if (u.includes('ntfy.sh') && u.includes('/json?poll=1')) return { ok: true, text: async () => '' };
         if (u.includes('ntfy.sh') && opt.method === 'POST') {
@@ -61,7 +73,7 @@ function boot(opts = {}) {
       });
     }
   });
-  return { dom, w: dom.window, d: dom.window.document, published, geminiCalls, copied };
+  return { dom, w: dom.window, d: dom.window.document, published, geminiCalls, groqCalls, copied };
 }
 
 (async () => {
@@ -466,6 +478,253 @@ function boot(opts = {}) {
     ok('agent back to 대기중', w.eval("S.agents.gemini.status") === '대기중');
     ok('key hint banner shown', !!d.querySelector('.aibanner'));
     ok('not stuck busy', w.eval('S.geminiBusy') === false);
+    dom.window.close();
+  }
+
+  /* ============ 5-B) @그록 — 칩·키 없음 안내 ============ */
+  {
+    const { dom, w, d, published, groqCalls } = boot();
+    await wait(160);
+    d.querySelector('[data-me="jingyu"]').click();
+    await wait(30);
+    d.querySelector('.tab[data-tab="chat"]').click();
+    await wait(30);
+    const chips = [...d.querySelectorAll('[data-mention]')].map(b => b.dataset.mention);
+    ok('groq: chip @그록', chips.includes('그록'), chips.join(','));
+    ok('groq: 인력 시드(⚡ 초고속 AI 비서)', w.eval("S.agents.groq && S.agents.groq.emoji") === '⚡'
+      && w.eval("S.agents.groq.role") === '초고속 AI 비서');
+    d.querySelector('#msgInput').value = '@그록 3층 거푸집 해체 순서 알려줘';
+    d.querySelector('#sendBtn').click();
+    await wait(500);
+    ok('groq no-key: 내 무전은 올라감', published.some(p => p.t === 'msg' && String(p.d.text).includes('거푸집')));
+    ok('groq no-key: Groq 호출 안 함', groqCalls.length === 0, 'calls=' + groqCalls.length);
+    const banner = d.querySelector('.aibanner.groqbanner');
+    ok('groq no-key: 안내 배너', !!banner && banner.textContent.includes('API 키'), banner && banner.textContent);
+    ok('groq no-key: 배너에 키 넣기 버튼', !!d.querySelector('#groqKeyFromChat'));
+    ok('groq no-key: 그록 답장 없음', !published.some(p => p.t === 'msg' && p.d.from === 'groq'));
+    d.querySelector('#groqKeyFromChat').click();
+    await wait(30);
+    ok('groq no-key: 키 설정 시트', d.querySelector('#overlay').classList.contains('on')
+      && d.querySelector('#sheet').textContent.includes('그록(Groq) API 키'));
+    ok('groq no-key: 키 입력칸', !!d.querySelector('#gqInput'));
+    dom.window.close();
+  }
+
+  /* ============ 5-C) 그록 키 저장 → OpenAI 호환 호출 → 답장 → 상태 복귀 ============ */
+  {
+    const { dom, w, d, published, groqCalls } = boot();
+    await wait(160);
+    d.querySelector('[data-me="jingyu"]').click();
+    await wait(30);
+
+    d.querySelector('.tab[data-tab="crew"]').click();
+    await wait(40);
+    const keyBtn = d.querySelector('#groqKeyBtn');
+    ok('groq crew: 키 설정 버튼', !!keyBtn && keyBtn.textContent.includes('그록(Groq) API 키 설정'));
+    ok('groq crew: 그록 카드', d.querySelector('#view-crew').textContent.includes('그록 즉답'));
+    ok('groq crew: 키 없음 표시', d.querySelector('#view-crew').textContent.includes('키 없음'));
+    keyBtn.click();
+    await wait(30);
+    d.querySelector('#gqInput').value = FAKE_GROQ_KEY;
+    d.querySelector('#gqSave').click();
+    await wait(60);
+    ok('groq key saved to localStorage(nogada_groq_key)', w.localStorage.getItem('nogada_groq_key') === FAKE_GROQ_KEY);
+    ok('groq key masked in UI', d.querySelector('#view-crew').textContent.includes('키 등록됨'));
+    ok('groq key NOT in any outgoing payload', !JSON.stringify(published).includes(FAKE_GROQ_KEY));
+
+    /* 제미나이 키 시트: 예전 AIza…·새 AQ.… 둘 다 안내 */
+    d.querySelector('#geminiKeyBtn').click();
+    await wait(30);
+    const gtxt = d.querySelector('#sheet').textContent;
+    ok('gemini key sheet: AIza·AQ 두 형식 안내', gtxt.includes('AIza') && gtxt.includes('AQ.'), gtxt.slice(0, 120));
+    d.querySelector('#overlay').click();
+    await wait(30);
+
+    d.querySelector('.tab[data-tab="chat"]').click();
+    await wait(30);
+    w.eval(`S.messages['m-ctx-g1'] = {id:'m-ctx-g1', from:'roen', name:'로엔', emoji:'🦺', text:'자재 야적장 정리 끝냈습니다', ts: Date.now()-5000}; render();`);
+    await wait(40);
+    d.querySelector('#msgInput').value = '@그록 3층 거푸집 해체 순서 알려줘';
+    d.querySelector('#sendBtn').click();
+    await wait(700);
+
+    ok('groq called once', groqCalls.length === 1, 'calls=' + groqCalls.length);
+    const call = groqCalls[0] || { url: '', headers: {}, body: {} };
+    ok('groq: OpenAI 호환 endpoint', call.url === 'https://api.groq.com/openai/v1/chat/completions', call.url);
+    ok('groq: Bearer 키 헤더', call.headers.Authorization === 'Bearer ' + FAKE_GROQ_KEY, JSON.stringify(call.headers));
+    ok('groq: 첫 모델 openai/gpt-oss-120b', call.body.model === 'openai/gpt-oss-120b', call.body.model);
+    ok('groq: stream false', call.body.stream === false);
+    ok('groq: max_completion_tokens', typeof call.body.max_completion_tokens === 'number' && call.body.max_completion_tokens > 0);
+    ok('groq: temperature', typeof call.body.temperature === 'number');
+    ok('groq: gpt-oss reasoning_effort low', call.body.reasoning_effort === 'low', String(call.body.reasoning_effort));
+    const sysMsg = (call.body.messages || [])[0] || {};
+    const userMsg = (call.body.messages || [])[1] || {};
+    ok('groq: system 메시지', sysMsg.role === 'system' && String(sysMsg.content).includes('AI 비서') && String(sysMsg.content).includes('그록'), String(sysMsg.content).slice(0, 60));
+    ok('groq: 강제 현장 반장 말투 없음', !String(sysMsg.content).includes('현장 반장'));
+    ok('groq: 존댓말 지시', String(sysMsg.content).includes('존댓말'));
+    ok('groq: 최신정보는 확인 필요 지시', /확인 필요/.test(String(sysMsg.content)));
+    ok('groq: user 메시지에 무전 맥락', userMsg.role === 'user'
+      && String(userMsg.content).includes('자재 야적장 정리 끝냈습니다')
+      && String(userMsg.content).includes('거푸집 해체 순서'));
+
+    ok('groq: 상태 작업중 published', published.some(p => p.t === 'agent' && p.d.id === 'groq' && p.d.status === '작업중' && p.d.zone === 'work'));
+    ok('groq: 상태 대기중 복귀', published.some(p => p.t === 'agent' && p.d.id === 'groq' && p.d.status === '대기중'));
+    const reply = published.filter(p => p.t === 'msg' && p.d.from === 'groq').pop();
+    ok('groq: 답장 그록 이름·이모지', !!reply && reply.d.name === '그록' && reply.d.emoji === '⚡');
+    ok('groq: 답장에 model', !!reply && reply.d.model === 'openai/gpt-oss-120b', reply && reply.d.model);
+    ok('groq: 답장 본문', !!reply && reply.d.text.includes('거푸집은 위에서부터') && reply.d.error !== true);
+    ok('groq: 답장 화면 렌더', d.querySelector('#view-chat').textContent.includes('거푸집은 위에서부터'));
+    ok('groq: typing indicator 없음', !d.querySelector('.msg.typing'));
+    ok('groq: busy 해제', w.eval('S.groqBusy') === false);
+    ok('groq: 키가 아웃바운드에 없음', !JSON.stringify(published).includes(FAKE_GROQ_KEY));
+    dom.window.close();
+  }
+
+  /* ============ 5-D) 그록 모델 폴백: 429(한도) · 404(모델 없음) → 다음 모델 ============ */
+  {
+    const { dom, w, d, published, groqCalls } = boot({
+      groqResponder: (call) => {
+        const model = call.body && call.body.model;
+        if (model === 'openai/gpt-oss-120b') {
+          return { ok: false, status: 429, json: async () => ({ error: { message: 'Rate limit reached for model `openai/gpt-oss-120b`', type: 'tokens', code: 'rate_limit_exceeded' } }) };
+        }
+        if (model === 'qwen/qwen3.8-27b') {
+          return { ok: false, status: 404, json: async () => ({ error: { message: 'The model `qwen/qwen3.8-27b` does not exist or you do not have access to it.', code: 'model_not_found' } }) };
+        }
+        return { ok: true, status: 200, json: async () => ({ choices: [{ message: { role: 'assistant', content: '세 번째 모델이 답했습니다.' }, finish_reason: 'stop' }] }) };
+      }
+    });
+    await wait(160);
+    d.querySelector('[data-me="jingyu"]').click();
+    await wait(30);
+    w.localStorage.setItem('nogada_groq_key', FAKE_GROQ_KEY);
+    d.querySelector('.tab[data-tab="chat"]').click();
+    await wait(30);
+    d.querySelector('#msgInput').value = '@그록 폴백 테스트';
+    d.querySelector('#sendBtn').click();
+    await wait(1500);
+    const seq = groqCalls.map(c => c.body.model);
+    ok('groq 429·404: 폴백 순서', seq.join(' > ') === 'openai/gpt-oss-120b > qwen/qwen3.8-27b > openai/gpt-oss-20b', seq.join(' > '));
+    const reply = published.filter(p => p.t === 'msg' && p.d.from === 'groq').pop();
+    ok('groq 429·404: 끝 모델 답장', !!reply && reply.d.text.includes('세 번째 모델') && reply.d.model === 'openai/gpt-oss-20b', (reply && reply.d.model) || 'none');
+    ok('groq 429·404: 오류 무전 없음', !published.some(p => p.t === 'msg' && p.d.from === 'groq' && p.d.error === true));
+    dom.window.close();
+  }
+
+  /* ============ 5-E) 그록 3모델 모두 503 → 안내 1건 + 상태 복귀 ============ */
+  {
+    const { dom, w, d, published, groqCalls } = boot({
+      groqResponder: () => ({ ok: false, status: 503, json: async () => ({ error: { message: 'The model is currently overloaded, please try again later.' } }) })
+    });
+    await wait(160);
+    d.querySelector('[data-me="jingyu"]').click();
+    await wait(30);
+    w.localStorage.setItem('nogada_groq_key', FAKE_GROQ_KEY);
+    d.querySelector('.tab[data-tab="chat"]').click();
+    await wait(30);
+    d.querySelector('#msgInput').value = '@그록 다 막히면?';
+    d.querySelector('#sendBtn').click();
+    await wait(1600);
+    const errs = published.filter(p => p.t === 'msg' && p.d.from === 'groq');
+    ok('groq all-503: 3모델 모두 시도', groqCalls.length === 3, 'calls=' + groqCalls.length);
+    ok('groq all-503: 안내 무전 1건', errs.length === 1, 'msgs=' + errs.length);
+    ok('groq all-503: 안내 문구', !!errs[0] && errs[0].d.error === true && /다시/.test(errs[0].d.text), errs[0] && errs[0].d.text);
+    ok('groq all-503: 상태 복귀', w.eval("S.agents.groq.status") === '대기중' && w.eval('S.groqBusy') === false);
+    dom.window.close();
+  }
+
+  /* ============ 5-F) 그록 키 오류(401) → 바로 안내 + 배너 ============ */
+  {
+    const { dom, w, d, published, groqCalls } = boot({
+      groqResponder: () => ({ ok: false, status: 401, json: async () => ({ error: { message: 'Invalid API Key', type: 'invalid_request_error', code: 'invalid_api_key' } }) })
+    });
+    await wait(160);
+    d.querySelector('[data-me="jingyu"]').click();
+    await wait(30);
+    w.localStorage.setItem('nogada_groq_key', 'gsk_BADKEY');
+    d.querySelector('.tab[data-tab="chat"]').click();
+    await wait(30);
+    d.querySelector('#msgInput').value = '@그록 테스트';
+    d.querySelector('#sendBtn').click();
+    await wait(600);
+    const reply = published.filter(p => p.t === 'msg' && p.d.from === 'groq').pop();
+    ok('groq 401: 키 안내 무전', !!reply && /키/.test(reply.d.text) && reply.d.error === true, reply && reply.d.text);
+    ok('groq 401: 다른 모델로 재시도 안 함(1회)', groqCalls.length === 1, 'calls=' + groqCalls.length);
+    ok('groq 401: 배너 표시', !!d.querySelector('.aibanner.groqbanner'));
+    ok('groq 401: 상태 복귀·busy 해제', w.eval("S.agents.groq.status") === '대기중' && w.eval('S.groqBusy') === false);
+    dom.window.close();
+  }
+
+  /* ============ 5-G) 그록 본문이 빈 응답 → 다음 모델 ============ */
+  {
+    const { dom, w, d, published, groqCalls } = boot({
+      groqResponder: (call) => {
+        if (call.body.model === 'openai/gpt-oss-120b') {
+          return { ok: true, status: 200, json: async () => ({ choices: [{ message: { role: 'assistant', content: '', reasoning: '생각만 하다 끝남' }, finish_reason: 'length' }] }) };
+        }
+        return { ok: true, status: 200, json: async () => ({ choices: [{ message: { role: 'assistant', content: '빈 응답 뚫고 답했습니다.' }, finish_reason: 'stop' }] }) };
+      }
+    });
+    await wait(160);
+    d.querySelector('[data-me="jingyu"]').click();
+    await wait(30);
+    w.localStorage.setItem('nogada_groq_key', FAKE_GROQ_KEY);
+    d.querySelector('.tab[data-tab="chat"]').click();
+    await wait(30);
+    d.querySelector('#msgInput').value = '@그록 빈 응답 테스트';
+    d.querySelector('#sendBtn').click();
+    await wait(1000);
+    const seq = groqCalls.map(c => c.body.model);
+    ok('groq 빈 응답: 다음 모델로', seq.join(' > ') === 'openai/gpt-oss-120b > qwen/qwen3.8-27b', seq.join(' > '));
+    const reply = published.filter(p => p.t === 'msg' && p.d.from === 'groq').pop();
+    ok('groq 빈 응답: 다음 모델 답장', !!reply && reply.d.text.includes('빈 응답 뚫고') && reply.d.model === 'qwen/qwen3.8-27b' && reply.d.error !== true);
+    dom.window.close();
+  }
+
+  /* ============ 5-H) 그록 400 reasoning 파라미터 거절 → 같은 모델을 순수 본문으로 재시도 ============ */
+  {
+    const { dom, w, d, published, groqCalls } = boot({
+      groqResponder: (call) => {
+        if (call.body.reasoning_effort) {
+          return { ok: false, status: 400, json: async () => ({ error: { message: 'reasoning_effort is not supported for this model', type: 'invalid_request_error' } }) };
+        }
+        return { ok: true, status: 200, json: async () => ({ choices: [{ message: { role: 'assistant', content: '파라미터 거절 뚫고 답했습니다.' }, finish_reason: 'stop' }] }) };
+      }
+    });
+    await wait(160);
+    d.querySelector('[data-me="jingyu"]').click();
+    await wait(30);
+    w.localStorage.setItem('nogada_groq_key', FAKE_GROQ_KEY);
+    d.querySelector('.tab[data-tab="chat"]').click();
+    await wait(30);
+    d.querySelector('#msgInput').value = '@그록 파라미터 테스트';
+    d.querySelector('#sendBtn').click();
+    await wait(900);
+    ok('groq 400 파라미터: 같은 모델 2회', groqCalls.length === 2
+      && groqCalls[0].body.model === 'openai/gpt-oss-120b' && groqCalls[1].body.model === 'openai/gpt-oss-120b',
+      groqCalls.map(c => c.body.model).join(' > '));
+    ok('groq 400 파라미터: 첫 요청엔 reasoning_effort', !!groqCalls[0] && groqCalls[0].body.reasoning_effort === 'low');
+    ok('groq 400 파라미터: 재시도엔 reasoning_effort 없음', !!groqCalls[1] && groqCalls[1].body.reasoning_effort === undefined);
+    const reply = published.filter(p => p.t === 'msg' && p.d.from === 'groq').pop();
+    ok('groq 400 파라미터: 답장 게시', !!reply && reply.d.text.includes('파라미터 거절') && reply.d.error !== true, reply && reply.d.text);
+    dom.window.close();
+  }
+
+  /* ============ 5-I) @groq 영문 멘션도 그록 즉답 ============ */
+  {
+    const { dom, w, d, published, groqCalls } = boot();
+    await wait(160);
+    d.querySelector('[data-me="jingyu"]').click();
+    await wait(30);
+    w.localStorage.setItem('nogada_groq_key', FAKE_GROQ_KEY);
+    d.querySelector('.tab[data-tab="chat"]').click();
+    await wait(30);
+    d.querySelector('#msgInput').value = '@groq 안녕';
+    d.querySelector('#sendBtn').click();
+    await wait(700);
+    ok('groq 영문 멘션: 호출됨', groqCalls.length === 1, 'calls=' + groqCalls.length);
+    const reply = published.filter(p => p.t === 'msg' && p.d.from === 'groq').pop();
+    ok('groq 영문 멘션: 답장', !!reply && reply.d.name === '그록', (reply && reply.d.name) || 'none');
     dom.window.close();
   }
 

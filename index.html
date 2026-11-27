@@ -195,6 +195,8 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
   border-radius:12px;padding:9px 11px;font-size:12.5px;color:#cfe7ff;margin:2px 0 10px;line-height:1.45}
 .aibanner b{color:#fff}
 .aibanner .chip{background:rgba(124,198,254,.16);border-color:rgba(124,198,254,.45);padding:4px 9px;font-size:11.5px;color:#e6f3ff}
+.aibanner.groqbanner{background:rgba(120,239,169,.09);border-color:rgba(120,239,169,.34);color:#d6ffe6}
+.aibanner.groqbanner .chip{background:rgba(120,239,169,.16);border-color:rgba(120,239,169,.45);color:#e8fff1}
 .keybox{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;background:var(--ink2);
   border:1px dashed var(--yellow-dim);border-radius:10px;padding:9px 11px;color:#d8cfbc;word-break:break-all}
 .aicard .stline{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:2px}
@@ -311,11 +313,12 @@ const SEED_AGENTS = {
   roen:  { id:'roen',  name:'로엔', role:'현장소장', emoji:'🦺', status:'대기중', zone:'office' },
   binna: { id:'binna', name:'박빈나 피클', role:'안전/일정반장', emoji:'🧡', status:'합류대기', zone:'break' },
   gemini:{ id:'gemini', name:'제미나이', role:'설계/기술 자문', emoji:'🤖', status:'대기중', zone:'work' },
+  groq:  { id:'groq',  name:'그록', role:'초고속 AI 비서', emoji:'⚡', status:'대기중', zone:'office' },
   cue:   { id:'cue',   name:'Cue', role:'외부 첩보반장', emoji:'🕶️', status:'대기중', zone:'yard' }
 };
 const WELCOME = {
   id:'m-welcome-01', from:'roen', name:'로엔', emoji:'🦺', sys:false,
-  text:'🚧 현장 사무소 개설 완료! @로엔 · @빈나 · @제미나이 · @Cue 로 불러주세요.\n급한 건은 무전기에 남겨주세요, 소장이 바로 달려갑니다.', ts:0
+  text:'🚧 현장 사무소 개설 완료! @로엔 · @빈나 · @제미나이 · @그록 · @Cue 로 불러주세요.\n급한 건은 무전기에 남겨주세요, 소장이 바로 달려갑니다.', ts:0
 };
 
 /* ---------- 제미나이(@제미나이) 즉답 설정 ----------
@@ -360,8 +363,34 @@ const GEMINI_PERSONA = [
    도구를 모르거나 거절하는 모델·키도 있어서, 400이 나면 같은 모델을 도구 없이 한 번 더 부른다. */
 const GEMINI_SEARCH_TOOLS = [{ google_search: {} }];
 
+/* ---------- 그록(@그록) 즉답 설정 ----------
+   Groq API(OpenAI 호환 /chat/completions)를 쓰고, API 키는 이 브라우저의
+   localStorage(nogada_groq_key)에만 저장합니다. 소스·GitHub·RTDB에는 넣지 않습니다.
+   2026-11 Groq 문서 기준으로 무료/개발자 티어에서 실제로 열려 있는 모델만 넣었습니다
+   (llama-3.3-70b-versatile · llama-3.1-8b-instant · qwen/qwen3-32b 는 2026년에 서비스 종료).
+   한국어를 잘하고 안정적인 순서로 앞에서부터 시도하고, 429·404·5xx·응답 지연·빈 응답이면
+   다음 모델로 넘어갑니다. */
+const GROQ_KEY_LS = 'nogada_groq_key';
+const GROQ_ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions';
+const GROQ_MODELS = [
+  { id:'openai/gpt-oss-120b', kind:'gptoss' },  /* 프로덕션 · 한국어 포함 다국어 성능 가장 좋음 */
+  { id:'qwen/qwen3.8-27b',     kind:'qwen'   },  /* 프리뷰 · 다국어(한국어) 강점 */
+  { id:'openai/gpt-oss-20b',  kind:'gptoss' }   /* 프로덕션 · 가볍고 빠른 마지막 보루 */
+];
+const GROQ_RETRY_STATUS = [404, 408, 409, 429, 500, 502, 503, 504];
+const GROQ_RETRY_DELAY_MS = 250;      // 모델 사이 재시도 간격
+const GROQ_ATTEMPT_TIMEOUT_MS = 20000; // 모델 하나당 응답 대기
+const GROQ_TOTAL_BUDGET_MS = 40000;    // 전체 재시도 예산
+const GROQ_PERSONA = [
+  "너는 '노가다 현장 합동 비서실' 무전방에 상주하는 유능하고 친근한 AI 비서 '그록'이다. 이모지는 ⚡.",
+  "특정 직업이나 캐릭터의 말투를 흉내 내지 않고, 어떤 질문이든 자연스러운 한국어 존댓말로 정확하고 짧게 답한다.",
+  "결론부터 2~5문장으로 답하고, 순서가 필요하면 짧은 줄바꿈 목록을 3개까지 쓴다. 인사말·사족·과한 겸손은 넣지 않는다.",
+  "너는 실시간 검색을 할 수 없다. 날씨·시세·환율·뉴스처럼 최신 확인이 필요한 내용은 기준 시점을 밝히고 '확인 필요'를 분명히 말하며, 확인하지 않은 수치·가격·규정은 지어내지 않는다.",
+  "법규·안전·의료·금융처럼 틀리면 위험한 내용에는 '공식 자료 확인 필요'를 붙인다. 마크다운 문법(**, #, 표)은 쓰지 않는다."
+].join('\n');
+
 const S = { agents:{}, tasks:{}, messages:{}, me:null, conn:'connecting', tab:'map', unread:0, lastSeen:0,
-            geminiBusy:false, geminiNoKeyHint:false };
+            geminiBusy:false, geminiNoKeyHint:false, groqBusy:false, groqNoKeyHint:false };
 
 /* ---------- 유틸 ---------- */
 const $ = s => document.querySelector(s);
@@ -384,7 +413,7 @@ function ago(ts){
   return Math.floor(s/86400)+'일 전';
 }
 function mentionize(text){
-  return esc(text).replace(/@(로엔|빈나|박빈나 피클|사장님|게스트|제미나이|gemini|cue)/gi, '<span class="mention">@$1</span>');
+  return esc(text).replace(/@(로엔|빈나|박빈나 피클|사장님|게스트|제미나이|gemini|그록|groq|cue)/gi, '<span class="mention">@$1</span>');
 }
 function toast(msg){
   const t = $('#toast'); t.textContent = msg; t.classList.add('on');
@@ -572,6 +601,7 @@ function sendMessage(text){
   S.messages[m.id] = m;
   render(); persistState();
   Wire.push({ t:'msg', ts: m.ts, d: m }).catch(()=> toast('무전 실패 — 잠시 후 다시'));
+  if(/@\s*(그록|groq)/i.test(text)) setTimeout(()=> askGroq(m), 150);
   if(/@\s*(제미나이|gemini)/i.test(text)) setTimeout(()=> askGemini(m), 150);
   setTimeout(scrollChatBottom, 30);
 }
@@ -593,8 +623,8 @@ function removeAgent(id){
   delete S.agents[id]; render(); persistState();
   Wire.push({ t:'del-agent', ts: now(), d:{ id } }).catch(()=>{});
 }
-/* 제미나이·Cue는 어느 현장(방)에나 상주합니다. 명단에 없으면 다시 투입합니다. */
-const CORE_AGENTS = ['gemini', 'cue'];
+/* 제미나이·그록·Cue는 어느 현장(방)에나 상주합니다. 명단에 없으면 다시 투입합니다. */
+const CORE_AGENTS = ['gemini', 'groq', 'cue'];
 function ensureCoreAgents(){
   let changed = false;
   CORE_AGENTS.forEach(id => {
@@ -684,7 +714,7 @@ function renderChat(){
 
   const html = list.length ? list.map(m => {
     const mine = S.me && m.from === S.me.id;
-    const ai = m.ai || m.via === 'gemini' || m.from === 'gemini';
+    const ai = m.ai || m.via === 'gemini' || m.from === 'gemini' || m.via === 'groq' || m.from === 'groq';
     return '<div class="msg' + (mine ? ' mine' : '') + (ai ? ' ai' : '') + '">'
       + '<div class="av">' + (m.emoji || '💬') + '</div>'
       + '<div class="body">'
@@ -693,23 +723,20 @@ function renderChat(){
       + '</div></div>';
   }).join('') : '<div class="empty">아직 무전 기록이 없습니다.<br>아래에 첫 무전을 남겨보세요.</div>';
 
-  const typing = S.geminiBusy
-    ? '<div class="msg ai typing"><div class="av">🤖</div><div class="body">'
-      + '<div class="who"><b>제미나이</b><span class="tagai">AI</span></div>'
-      + '<div class="bubble">무전 받는 중…</div></div></div>'
-    : '';
+  const typing = (S.geminiBusy ? typingHtml('gemini') : '') + (S.groqBusy ? typingHtml('groq') : '');
 
-  const names = ['제미나이', 'Cue'];
+  const names = ['제미나이', '그록', 'Cue'];
   Object.values(S.agents).forEach(a => {
     if(a.name && names.indexOf(a.name) < 0) names.push(a.name);
   });
   const chips = names.slice(0, 8)
-    .map(n => '<button class="chip" data-mention="' + esc(n) + '">' + (n === '제미나이' || n === 'Cue' ? '🤖 ' : '') + '@' + esc(n) + '</button>').join('');
+    .map(n => '<button class="chip" data-mention="' + esc(n) + '">' + chipEmoji(n) + '@' + esc(n) + '</button>').join('');
 
   el.innerHTML = ''
     + '<div class="card chatcard">'
     +   '<div class="sec-title">📻 무전기 <span class="tiny muted" style="font-weight:600">실시간</span><span class="line"></span></div>'
     +   geminiBannerHtml()
+    +   groqBannerHtml()
     +   '<div class="chat-scroll" id="chatScroll">' + html + typing + '</div>'
     +   '<div class="quick">' + chips
     +     '<button class="chip" data-quick="지금 어디야?">📍 위치 확인</button>'
@@ -737,6 +764,20 @@ function renderChat(){
   if(wasNear) scrollChatBottom();
   const kb = $('#aiKeyFromChat');
   if(kb) kb.addEventListener('click', openGeminiKey);
+  const gkb = $('#groqKeyFromChat');
+  if(gkb) gkb.addEventListener('click', openGroqKey);
+}
+/* AI가 답을 만드는 동안 무전기 아래에 보이는 말풍선 */
+function typingHtml(id){
+  const a = SEED_AGENTS[id] || {};
+  return '<div class="msg ai typing"><div class="av">' + (a.emoji || '🤖') + '</div><div class="body">'
+    + '<div class="who"><b>' + esc(a.name || '') + '</b><span class="tagai">AI</span></div>'
+    + '<div class="bubble">무전 받는 중…</div></div></div>';
+}
+function chipEmoji(name){
+  if(name === '그록') return '⚡ ';
+  if(name === '제미나이' || name === 'Cue') return '🤖 ';
+  return '';
 }
 function geminiBannerHtml(){
   if(!S.geminiNoKeyHint) return '';
@@ -745,6 +786,14 @@ function geminiBannerHtml(){
     + (has ? '🔑 저장된 제미나이 키가 거부됐습니다.' : '🔑 아직 제미나이 API 키가 없습니다.')
     + ' <b>@제미나이</b> 즉답을 쓰려면 키를 한 번만 넣어주세요 (이 브라우저에만 저장).'
     + ' <button class="chip" id="aiKeyFromChat">키 넣기</button></div>';
+}
+function groqBannerHtml(){
+  if(!S.groqNoKeyHint) return '';
+  const has = !!groqKey();
+  return '<div class="aibanner groqbanner">'
+    + (has ? '⚡ 저장된 그록 키가 거부됐습니다.' : '⚡ 아직 그록(Groq) API 키가 없습니다.')
+    + ' <b>@그록</b> 즉답을 쓰려면 키를 한 번만 넣어주세요 (이 브라우저에만 저장).'
+    + ' <button class="chip" id="groqKeyFromChat">키 넣기</button></div>';
 }
 function scrollChatBottom(){
   const sc = $('#chatScroll');
@@ -850,10 +899,11 @@ function renderCrew(){
     + '<div class="sec-title">👷 인력 현황 <span class="tiny muted" style="font-weight:600">' + agents.length + '명 출근</span><span class="line"></span></div>'
     + '<div class="crew">' + (cards || '<div class="empty">인력이 없습니다.</div>') + '</div>'
     + geminiCardHtml()
+    + groqCardHtml()
     + cueCardHtml()
     + '<button class="btn ghost" id="addAgentBtn" style="width:100%;margin-top:10px">＋ 인력 · 봇 추가</button>'
     + '<button class="btn ghost" id="shareBtn" style="width:100%;margin-top:8px">🔗 현장 초대 링크 복사</button>'
-    + '<details class="help"><summary>🔌 외부 봇(제미나이·Cue 등) 연결 방법</summary>'
+    + '<details class="help"><summary>🔌 외부 봇(제미나이·그록·Cue 등) 연결 방법</summary>'
     +   '<div class="body">'
     +     '<div>현재 채널: <b>' + (Wire.mode === 'rtdb' ? 'Firebase RTDB' : '임시 ntfy 중계') + '</b></div>'
     +     '<div style="margin-top:4px;word-break:break-all">' + esc(ep) + '</div>'
@@ -864,6 +914,7 @@ function renderCrew(){
     + '</details>';
 
   if($('#geminiKeyBtn')) $('#geminiKeyBtn').addEventListener('click', openGeminiKey);
+  if($('#groqKeyBtn')) $('#groqKeyBtn').addEventListener('click', openGroqKey);
   if($('#cueCopyBtn')) $('#cueCopyBtn').addEventListener('click', ()=> copyText(cuePrompt(), '📋 Cue한테 시킬 문구를 복사했습니다'));
   if($('#cueAddrBtn')) $('#cueAddrBtn').addEventListener('click', ()=> copyText(cuePrompt(), '무전 주소·문구를 복사했습니다'));
   $('#addAgentBtn').addEventListener('click', openAddAgent);
@@ -917,6 +968,20 @@ function geminiCardHtml(){
     + '<div class="stline">' + st
     +   '<span class="statuspill ' + (key ? 'st-준비' : 'st-대기중') + '">' + (key ? '키 등록됨 · ' + esc(maskKey(key)) : '키 없음') + '</span></div>'
     + '<button class="btn" id="geminiKeyBtn" style="width:100%;margin-top:10px">🔑 제미나이 API 키 설정</button>'
+    + '</div>';
+}
+
+function groqCardHtml(){
+  const key = groqKey();
+  const st = S.groqBusy
+    ? '<span class="statuspill st-작업중">답변 준비중</span>'
+    : '<span class="statuspill st-대기중">대기중</span>';
+  return '<div class="card aicard" style="margin-top:10px">'
+    + '<div class="sec-title">⚡ 그록 즉답 <span class="tiny muted" style="font-weight:600">Groq 초고속</span><span class="line"></span></div>'
+    + '<div class="tiny muted" style="margin-bottom:9px">무전기에 <b>@그록</b> 이라고 부르면 Groq API로 아주 빠르게 답합니다. 최신 정보 검색은 붙지 않습니다.</div>'
+    + '<div class="stline">' + st
+    +   '<span class="statuspill ' + (key ? 'st-준비' : 'st-대기중') + '">' + (key ? '키 등록됨 · ' + esc(maskKey(key)) : '키 없음') + '</span></div>'
+    + '<button class="btn" id="groqKeyBtn" style="width:100%;margin-top:10px">🔑 그록(Groq) API 키 설정</button>'
     + '</div>';
 }
 
@@ -1218,8 +1283,10 @@ function askGemini(msg){
     });
 }
 function postAiMessage(text, extra){
-  const m = Object.assign({ id:'m-' + uid(), from:'gemini', name:'제미나이', emoji:'🤖',
-                            text:String(text || ''), ts: now(), via:'gemini', ai:true }, extra || {});
+  const x = Object.assign({}, extra || {});
+  const seed = SEED_AGENTS[x.via || x.from || 'gemini'] || SEED_AGENTS.gemini;
+  const m = Object.assign({ id:'m-' + uid(), from: seed.id, name: seed.name, emoji: seed.emoji,
+                            text:String(text || ''), ts: now(), via: seed.id, ai:true }, x);
   S.messages[m.id] = m;
   render(); persistState();
   Wire.push({ t:'msg', ts: m.ts, d: m }).catch(()=>{});
@@ -1234,13 +1301,14 @@ function openGeminiKey(){
     + '<p class="desc">무전기에 <b>@제미나이</b> 라고 부르면 이 키로 구글 제미나이에 바로 물어보고 답을 올려줍니다.</p>'
     + '<div class="keybox">' + (saved ? '✅ 등록됨 · ' + esc(maskKey(saved)) : '아직 등록된 키가 없습니다') + '</div>'
     + '<div class="fld" style="margin-top:12px"><label>Gemini API 키</label>'
-    + '<input type="text" id="gkInput" placeholder="AIza…" autocomplete="off" autocapitalize="off" spellcheck="false"></div>'
+    + '<input type="text" id="gkInput" placeholder="AIza… 또는 AQ.…" autocomplete="off" autocapitalize="off" spellcheck="false"></div>'
     + '<button class="btn" id="gkSave" style="width:100%">저장</button>'
     + '<button class="btn ghost" id="gkTest" style="width:100%;margin-top:8px">키 테스트</button>'
     + (saved ? '<button class="btn ghost" id="gkDel" style="width:100%;margin-top:8px">키 삭제</button>' : '')
     + '<div class="tiny muted" style="margin-top:12px;line-height:1.65">'
     +   '• 키는 <b>이 브라우저(localStorage)</b>에만 저장됩니다. GitHub 공개 코드와 Firebase DB에는 올라가지 않습니다.<br>'
     +   '• 휴대폰·PC 각각 처음 한 번씩 넣어주세요.<br>'
+    +   '• 키 형식: <b>AIza…</b>(예전 형식)와 <b>AQ.…</b>(새 형식) 둘 다 그대로 붙여넣으면 됩니다.<br>'
     +   '• 발급: aistudio.google.com/apikey → Create API key<br>'
     +   '• 모델: gemini-3.5-flash-lite (안되면 3.6-flash · 3.8-flash · 2.5-flash · flash-latest 로 자동 재시도)'
     + '</div>'
@@ -1264,6 +1332,259 @@ function openGeminiKey(){
   });
   if($('#gkDel')) $('#gkDel').addEventListener('click', ()=>{
     geminiSetKey(''); closeSheet(); render(); toast('키를 삭제했습니다');
+  });
+}
+
+/* ---------- 그록(Groq) 즉답 ----------
+   OpenAI 호환 규격(POST /openai/v1/chat/completions)에 Bearer 키로 호출합니다.
+   키는 이 브라우저 localStorage(nogada_groq_key)에만 저장합니다. */
+function groqKey(){
+  try{ return (localStorage.getItem(GROQ_KEY_LS) || '').trim(); }catch(e){ return ''; }
+}
+function groqSetKey(v){
+  try{
+    if(v) localStorage.setItem(GROQ_KEY_LS, String(v).trim());
+    else localStorage.removeItem(GROQ_KEY_LS);
+  }catch(e){ toast('브라우저 저장이 막혀 있습니다'); }
+}
+
+function buildGroqPrompt(msg){
+  const list = visibleMessages();
+  const i = list.findIndex(m => m.id === msg.id);
+  const before = (i >= 0 ? list.slice(0, i) : list).filter(m => !m.sys).slice(-6);
+  const line = m => (m.name || '무명') + ': ' + String(m.text || '').replace(/\s+/g, ' ').slice(0, 300);
+  const ctx = before.length ? before.map(line).join('\n') : '(아직 없음)';
+  return '[최근 무전 기록]\n' + ctx
+    + '\n\n[지금 온 무전]\n' + line(msg)
+    + '\n\n위 무전에 그록으로서 답해라. 답변 본문만 써라.';
+}
+
+function groqSleep(ms){
+  return new Promise(r => setTimeout(r, ms));
+}
+
+/* 모델 하나를 호출합니다. 응답 지연은 AbortController로 끊습니다.
+   opts.plain === true 이면 reasoning_effort 같은 모델별 파라미터를 빼고 보냅니다
+   (파라미터를 모르는 모델이 400으로 거절할 때 대비). */
+async function groqCallModel(model, promptText, key, timeoutMs, opts){
+  const plain = !!(opts && opts.plain);
+  const payload = {
+    model: model.id,
+    messages: [
+      { role: 'system', content: GROQ_PERSONA },
+      { role: 'user', content: promptText }
+    ],
+    temperature: 0.6,
+    top_p: 0.95,
+    max_completion_tokens: 1024,
+    stream: false
+  };
+  if(!plain){
+    if(model.kind === 'gptoss'){
+      payload.reasoning_effort = 'low';    /* 짧은 무전 답이라 추론은 가볍게 — 속도 우선 */
+    }
+    if(model.kind === 'qwen'){
+      payload.reasoning_effort = 'none';   /* 추론 토큰 없이 바로 답 */
+    }
+  }
+
+  let timer = null, ctrl = null, timedOut = false;
+  if(typeof AbortController !== 'undefined'){
+    ctrl = new AbortController();
+    timer = setTimeout(() => { timedOut = true; try{ ctrl.abort(); }catch(e){} }, timeoutMs);
+  }
+  try{
+    const opt = {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+      body: JSON.stringify(payload)
+    };
+    if(ctrl) opt.signal = ctrl.signal;
+    const r = await fetch(GROQ_ENDPOINT, opt);
+    let data = null;
+    try{ data = await r.json(); }catch(e){ data = null; }
+    return { r, data, timedOut: timedOut };
+  }catch(e){
+    return { r: null, data: null, timedOut: timedOut || !!(e && e.name === 'AbortError'), netErr: e };
+  }finally{
+    if(timer) clearTimeout(timer);
+  }
+}
+
+/* 답 본문을 꺼냅니다. 추론 모델이 본문 앞에 붙이는 <think>…</think> 류는 걷어냅니다. */
+function groqText(data){
+  const ch = ((data && data.choices) || [])[0] || {};
+  const msg = ch.message || {};
+  let out = String(msg.content == null ? '' : msg.content);
+  out = out.replace(/<(think|thinking|reasoning)>[\s\S]*?<\/\1>/gi, '').trim();
+  if(/^<(think|thinking|reasoning)>/i.test(out)) out = '';
+  return out;
+}
+
+/* 429·404·5xx·응답 지연·빈 응답이면 다음 모델로 넘어가 계속 시도합니다.
+   모든 모델이 막혔을 때만 사용자에게 한 번 안내합니다. */
+async function groqFetch(promptText, key){
+  const started = Date.now();
+  const tried = [];
+  const pushTried = id => { if(tried.indexOf(id) < 0) tried.push(id); };
+  let lastModelErr = '';
+  let sawBusy = false, sawQuota = false, sawTimeout = false, sawNetwork = false,
+      sawNotFound = false, sawEmpty = false, sawPerm = false;
+
+  for(let i = 0; i < GROQ_MODELS.length; i++){
+    const model = GROQ_MODELS[i];
+    if(GROQ_TOTAL_BUDGET_MS - (Date.now() - started) <= 500) break; /* 전체 예산 소진 */
+    let useExtras = true;
+
+    for(let pass = 0; pass < 2; pass++){
+      const left = GROQ_TOTAL_BUDGET_MS - (Date.now() - started);
+      if(left <= 500) break;
+      const res = await groqCallModel(model, promptText, key, Math.min(GROQ_ATTEMPT_TIMEOUT_MS, left), { plain: !useExtras });
+
+      if(res.r && res.r.ok && res.data){
+        const out = groqText(res.data);
+        if(out) return { text: out, model: model.id, tried: tried };
+        const why = (((res.data.choices || [])[0] || {}).finish_reason) || '';
+        pushTried(model.id);
+        sawEmpty = true;
+        lastModelErr = '본문 없음' + (why ? '(' + why + ')' : '');
+        break;
+      }
+
+      if(!res.r){
+        pushTried(model.id);
+        if(res.timedOut) sawTimeout = true; else sawNetwork = true;
+        lastModelErr = res.timedOut ? '응답 지연(timeout)' : 'network: ' + String((res.netErr && res.netErr.message) || res.netErr || '');
+        break;
+      }
+
+      const status = res.r.status;
+      const err = (res.data && res.data.error) || {};
+      const msg = String(err.message || err.code || err.type || '');
+      lastModelErr = msg || ('HTTP ' + status);
+
+      /* 키 문제 — 다른 모델로 넘어가도 어차피 같으니 바로 멈추고 설정을 안내 */
+      if(status === 401 || (status === 400 && /invalid[ _]?api[ _]?key|api[ _]?key.*(invalid|expired)|unauthorized|authentication/i.test(msg))){
+        throw { kind: 'key', userMessage: '⚡ 그록(Groq) API 키가 거부됐습니다(' + status + '). 인력 현황 → 🔑 그록(Groq) API 키 설정에서 키를 다시 넣어주세요.' };
+      }
+
+      /* reasoning_effort 같은 파라미터를 모르는 모델 → 같은 모델을 순수 본문으로 한 번 더 */
+      if(status === 400 && useExtras && /reasoning|unsupported|unknown|unexpected|invalid[ _]?parameter|invalid[ _]?value/i.test(msg)){
+        useExtras = false;
+        continue;
+      }
+
+      /* 404(모델 없음·종료) · 429(한도) · 503(과부하) · 5xx(일시 장애) → 다음 모델로 */
+      const retriable = GROQ_RETRY_STATUS.indexOf(status) >= 0
+        || /rate[ _]?limit|too many requests|overloaded|unavailable|try again|decommission|does not exist|not[ _]?found|model[ _]?not|internal|temporar/i.test(msg);
+      pushTried(model.id);
+      if(status === 429) sawQuota = true;
+      else if(status === 404) sawNotFound = true;
+      else if(status === 403) sawPerm = true;
+      else if(status >= 500) sawBusy = true;
+      if(!retriable){
+        throw { kind: 'api', userMessage: '⚡ 그록 호출이 실패했습니다(' + status + '). ' + msg.slice(0, 120) };
+      }
+      break;
+    }
+
+    if(i < GROQ_MODELS.length - 1) await groqSleep(GROQ_RETRY_DELAY_MS);
+  }
+
+  /* 모든 모델 소진 — 원인에 맞게 한 번만 알린다 */
+  const detail = ' (시도: ' + (tried.join(' → ') || '-') + ')' + (lastModelErr ? ' · ' + String(lastModelErr).slice(0, 80) : '');
+  if(sawQuota){
+    throw { kind: 'quota', userMessage: '⏳ 그록 무료 호출 한도를 넘었습니다(429). 1분쯤 뒤에 다시 불러주세요.' + detail };
+  }
+  if(sawBusy){
+    throw { kind: 'busy', userMessage: '⏳ 지금 그록 모델이 모두 붐빕니다. 1~2분 뒤에 다시 불러주세요.' + detail };
+  }
+  if(sawTimeout || sawNetwork){
+    throw { kind: 'network', userMessage: '📡 그록 서버 응답이 늦거나 무전망(인터넷)이 불안정합니다. 잠시 뒤 다시 불러주세요.' + detail };
+  }
+  if(sawPerm){
+    throw { kind: 'perm', userMessage: '🚫 이 키로는 그록 모델 호출이 거부됐습니다(403). console.groq.com 에서 키·모델 접근 상태를 확인해 주세요.' + detail };
+  }
+  if(sawNotFound){
+    throw { kind: 'model', userMessage: '⚡ 쓸 수 있는 그록 모델을 찾지 못했습니다. Groq 콘솔에서 사용 가능한 모델을 확인해 주세요.' + detail };
+  }
+  if(sawEmpty){
+    throw { kind: 'empty', userMessage: '⚡ 그록 답이 비어 있습니다. 질문을 조금 바꿔 다시 불러주세요.' + detail };
+  }
+  throw { kind: 'api', userMessage: '⚡ 그록 호출이 실패했습니다. 잠시 뒤 다시 불러주세요.' + detail };
+}
+
+function askGroq(msg){
+  const key = groqKey();
+  if(!key){
+    S.groqNoKeyHint = true;
+    render();
+    toast('⚡ 그록 API 키가 없습니다 — [인력 현황]에서 넣어주세요');
+    return Promise.resolve(null);
+  }
+  if(S.groqBusy){
+    toast('⚡ 그록이 이전 무전에 답하는 중입니다');
+    return Promise.resolve(null);
+  }
+  S.groqBusy = true;
+  S.groqNoKeyHint = false;
+  const base = S.agents.groq || Object.assign({}, SEED_AGENTS.groq);
+  upsertAgent(Object.assign({}, base, { status: '작업중', zone: 'work' }));
+  render();
+  return groqFetch(buildGroqPrompt(msg), key)
+    .then(res => postAiMessage(res.text, { from: 'groq', model: res.model }))
+    .catch(err => {
+      if(err && err.kind === 'key') S.groqNoKeyHint = true;
+      postAiMessage((err && err.userMessage) || '⚡ 그록 호출이 실패했습니다.', { from: 'groq', error: true });
+      return null;
+    })
+    .then(m => {
+      S.groqBusy = false;
+      const back = Object.assign({}, S.agents.groq || base, { status: '대기중', zone: (base.zone || 'office') });
+      upsertAgent(back);
+      render();
+      return m;
+    });
+}
+
+function openGroqKey(){
+  const saved = groqKey();
+  openSheet(
+    '<h3>🔑 그록(Groq) API 키 설정</h3>'
+    + '<p class="desc">무전기에 <b>@그록</b> 이라고 부르면 이 키로 Groq API에 바로 물어보고 아주 빠르게 답을 올려줍니다.</p>'
+    + '<div class="keybox">' + (saved ? '✅ 등록됨 · ' + esc(maskKey(saved)) : '아직 등록된 키가 없습니다') + '</div>'
+    + '<div class="fld" style="margin-top:12px"><label>Groq API 키</label>'
+    + '<input type="text" id="gqInput" placeholder="gsk_…" autocomplete="off" autocapitalize="off" spellcheck="false"></div>'
+    + '<button class="btn" id="gqSave" style="width:100%">저장</button>'
+    + '<button class="btn ghost" id="gqTest" style="width:100%;margin-top:8px">키 테스트</button>'
+    + (saved ? '<button class="btn ghost" id="gqDel" style="width:100%;margin-top:8px">키 삭제</button>' : '')
+    + '<div class="tiny muted" style="margin-top:12px;line-height:1.65">'
+    +   '• 키는 <b>이 브라우저(localStorage)</b>에만 저장됩니다. GitHub 공개 코드와 Firebase DB에는 올라가지 않습니다.<br>'
+    +   '• 휴대폰·PC 각각 처음 한 번씩 넣어주세요.<br>'
+    +   '• 발급: console.groq.com/keys → Create API Key (무료)<br>'
+    +   '• 모델: openai/gpt-oss-120b (안되면 qwen/qwen3.8-27b · openai/gpt-oss-20b 로 자동 재시도)<br>'
+    +   '• 최신 날씨·시세·뉴스 검색은 붙지 않습니다. 그런 건 @제미나이를 부르세요.'
+    + '</div>'
+  );
+  $('#gqSave').addEventListener('click', ()=>{
+    const v = $('#gqInput').value.trim();
+    if(!v){ toast('키를 입력하세요'); return; }
+    groqSetKey(v);
+    S.groqNoKeyHint = false;
+    closeSheet(); render();
+    toast('✅ 그록 키를 이 브라우저에 저장했습니다');
+  });
+  $('#gqTest').addEventListener('click', async ()=>{
+    const v = $('#gqInput').value.trim() || groqKey();
+    if(!v){ toast('키를 먼저 입력하세요'); return; }
+    toast('⚡ 키 확인 중…');
+    try{
+      const res = await groqFetch('핑. "정상"이라고만 답해줘.', v);
+      toast('✅ 키 정상 · ' + res.model);
+    }catch(e){ toast((e && e.userMessage) || '키 테스트 실패'); }
+  });
+  if($('#gqDel')) $('#gqDel').addEventListener('click', ()=>{
+    groqSetKey(''); closeSheet(); render(); toast('그록 키를 삭제했습니다');
   });
 }
 
