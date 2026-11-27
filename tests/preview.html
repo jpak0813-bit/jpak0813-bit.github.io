@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>모바일 미리보기 — 노가다 현장 합동 비서실</title>
+<style>
+  html,body{margin:0;background:#1b1b1f;color:#e8e0cf;font:13px/1.4 -apple-system,"Malgun Gothic",sans-serif}
+  .bar{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid #333;position:sticky;top:0;background:#1b1b1f;z-index:2}
+  .bar b{font-size:13px}
+  .bar select{background:#2a2a30;color:#e8e0cf;border:1px solid #444;border-radius:7px;padding:5px 8px}
+  .stage{display:flex;gap:18px;padding:18px;align-items:flex-start}
+  .phone{width:390px;height:844px;border:10px solid #000;border-radius:36px;overflow:hidden;background:#000;flex:0 0 auto;box-shadow:0 20px 50px rgba(0,0,0,.6)}
+  .phone iframe{width:390px;height:844px;border:0;display:block}
+  .note{max-width:360px;line-height:1.7;color:#b9ae97}
+  .note code{background:#2a2a30;padding:1px 5px;border-radius:4px}
+</style>
+</head>
+<body>
+<div class="bar">
+  <b>📱 390×844 모바일 미리보기</b>
+  <select id="pick">
+    <option value="?auth=off&db=off">index.html?auth=off&amp;db=off</option>
+    <option value="?auth=off&db=off&tab=crew">인력 현황 탭 열기</option>
+  </select>
+  <a href="index.html?auth=off&db=off" target="_blank" style="color:#ffd84d">새 창으로 열기</a>
+</div>
+<div class="stage">
+  <div class="phone"><iframe id="ph" src="../index.html?auth=off&db=off" title="모바일 미리보기"></iframe></div>
+  <div class="note">
+    <p>실제 배포본을 <b>390×844</b>(갤럭시/아이폰 세로) 크기로 띄워 보는 확인용 페이지입니다. 주소에 <code>?auth=off&db=off</code>를 붙여 로그인·DB 없이 화면만 봅니다.</p>
+    <p>여기서 상태를 바꾼 값은 이 브라우저의 localStorage에만 저장되고 Firebase에는 쓰지 않습니다.</p>
+    <p>PC에서 화면을 확인할 때: 지도 위 캐릭터가 라운지에서 쉬고 있는지, 캐릭터를 눌러 상태 토스트가 뜨는지, 하단 탭바까지 빈 공간 없이 차는지 보세요.</p>
+  </div>
+</div>
+<script>
+  document.getElementById('pick').addEventListener('change', e => {
+    document.getElementById('ph').src = '../index.html' + e.target.value;
+  });
+</script>
+</body>
+</html>
