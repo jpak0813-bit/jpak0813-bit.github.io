@@ -89,6 +89,7 @@ function boot(opts = {}) {
     ok('chip @제미나이', chips.includes('제미나이'), chips.join(','));
     ok('chip @Cue', chips.includes('Cue'), chips.join(','));
     ok('welcome message', d.querySelector('#view-chat').textContent.includes('현장 사무소 개설 완료'));
+    ok('chat: 무전 목록이 남는 높이를 채우는 카드', !!d.querySelector('#view-chat .chatcard .chat-scroll'));
     dom.window.close();
   }
 
@@ -162,8 +163,13 @@ function boot(opts = {}) {
     ok('3.x payload: thinkingConfig 없음', gen3.thinkingConfig === undefined, JSON.stringify(gen3));
     ok('3.x payload: maxOutputTokens 있음', typeof gen3.maxOutputTokens === 'number' && gen3.maxOutputTokens > 0, JSON.stringify(gen3));
     const sys = call.body && call.body.systemInstruction && call.body.systemInstruction.parts[0].text || '';
-    ok('persona: 설계/기술 자문', sys.includes('설계·기술 자문') || sys.includes('설계/기술 자문'));
-    ok('persona: 현장 말투 지시', sys.includes('현장 반장'));
+    ok('persona: 일반 AI 비서', sys.includes('AI 비서') && sys.includes('제미나이'), sys.slice(0, 60));
+    ok('persona: 강제 현장 반장 말투 없음', !sys.includes('현장 반장'));
+    ok('persona: 정중한 존댓말 지시', sys.includes('존댓말'));
+    ok('persona: 검색 근거 지시', sys.includes('구글 검색'));
+    ok('tools: google_search 그라운딩 전송',
+      !!(call.body && call.body.tools) && JSON.stringify(call.body.tools).includes('google_search'),
+      JSON.stringify(call.body && call.body.tools));
     const prompt = call.body && call.body.contents[0].parts[0].text || '';
     ok('context: 이전 무전 포함', prompt.includes('자재 야적장 정리 끝냈습니다'));
     ok('context: 지금 온 무전 포함', prompt.includes('거푸집 해체 순서'));
@@ -177,6 +183,72 @@ function boot(opts = {}) {
     ok('AI tag rendered', !!d.querySelector('.msg.ai .tagai'));
     ok('typing indicator gone', !d.querySelector('.msg.typing'));
     ok('key NOT in reply/payloads', !JSON.stringify(published).includes(FAKE_KEY));
+    dom.window.close();
+  }
+
+  /* ============ 3-B) tools(google_search) 400 거절 → 같은 모델을 도구 없이 재시도 ============ */
+  {
+    const { dom, w, d, published, geminiCalls } = boot({
+      geminiResponder: (call) => {
+        if (call.body && call.body.tools) {
+          return { ok: false, status: 400, json: async () => ({ error: { code: 400, status: 'INVALID_ARGUMENT', message: 'Unknown name "tools": Cannot find field.' } }) };
+        }
+        return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: '검색 도구 없이도 답합니다.' }] } }] }) };
+      }
+    });
+    await wait(160);
+    d.querySelector('[data-me="jingyu"]').click();
+    await wait(30);
+    w.localStorage.setItem('nogada_gemini_api_key', FAKE_KEY);
+    d.querySelector('.tab[data-tab="chat"]').click();
+    await wait(30);
+    d.querySelector('#msgInput').value = '@제미나이 서울 날씨 어때?';
+    d.querySelector('#sendBtn').click();
+    await wait(800);
+    const seq = geminiCalls.map(c => (c.url.match(/models\/([^:]+)/) || [])[1]);
+    ok('tools 400: 같은 모델에 두 번 요청',
+      seq.length === 2 && seq[0] === 'gemini-3.5-flash-lite' && seq[1] === 'gemini-3.5-flash-lite', seq.join(' > '));
+    ok('tools 400: 첫 요청은 tools 포함', !!(geminiCalls[0] && geminiCalls[0].body.tools));
+    ok('tools 400: 재시도에는 tools 없음', !!(geminiCalls[1] && geminiCalls[1].body) && geminiCalls[1].body.tools === undefined);
+    const reply = published.filter(p => p.t === 'msg' && p.d.from === 'gemini').pop();
+    ok('tools 400: 같은 모델 답장 게시', !!reply && reply.d.model === 'gemini-3.5-flash-lite'
+      && reply.d.text.includes('검색 도구 없이도') && reply.d.error !== true, (reply && reply.d.text) || 'none');
+    dom.window.close();
+  }
+
+  /* ============ 3-C) 실시간 검색 그라운딩 메타데이터 → 출처 한 줄(최대 2개) ============ */
+  {
+    const { dom, w, d, published, geminiCalls } = boot({
+      geminiResponder: () => ({ ok: true, status: 200, json: async () => ({
+        candidates: [{
+          content: { parts: [{ text: '오늘 서울 낮 최고 13도입니다. 내일은 비 소식이 있습니다.' }] },
+          groundingMetadata: {
+            webSearchQueries: ['서울 날씨'],
+            groundingChunks: [
+              { web: { uri: 'https://www.weather.go.kr/main', title: '기상청' } },
+              { web: { uri: 'https://www.yna.co.kr/view/1', title: '연합뉴스' } },
+              { web: { uri: 'https://example.com/x', title: '세 번째 출처' } }
+            ]
+          }
+        }]
+      }) })
+    });
+    await wait(160);
+    d.querySelector('[data-me="jingyu"]').click();
+    await wait(30);
+    w.localStorage.setItem('nogada_gemini_api_key', FAKE_KEY);
+    d.querySelector('.tab[data-tab="chat"]').click();
+    await wait(30);
+    d.querySelector('#msgInput').value = '@제미나이 오늘 서울 날씨 알려줘';
+    d.querySelector('#sendBtn').click();
+    await wait(600);
+    const reply = published.filter(p => p.t === 'msg' && p.d.from === 'gemini').pop();
+    ok('grounding: 요청에 tools 포함', !!(geminiCalls[0] && geminiCalls[0].body.tools));
+    ok('grounding: 답 본문 유지 + 출처 추가', !!reply
+      && reply.d.text.includes('낮 최고 13도') && reply.d.text.includes('출처') && reply.d.text.includes('기상청')
+      && reply.d.text.includes('연합뉴스'), reply && reply.d.text);
+    ok('grounding: 출처는 2개까지만', !!reply && !reply.d.text.includes('세 번째 출처'));
+    ok('grounding: 답장 모델·상태 정상', !!reply && reply.d.model === 'gemini-3.5-flash-lite' && w.eval('S.geminiBusy') === false);
     dom.window.close();
   }
 
@@ -418,6 +490,22 @@ function boot(opts = {}) {
     ok('cue prompt: emoji 🕶️', text.includes('"emoji":"🕶️"'));
     ok('cue prompt: @Cue mention rule', text.includes('@Cue'));
     dom.window.close();
+  }
+
+  /* ============ 7) 모바일 레이아웃(앱 셸) — CSS 계약 ============ */
+  {
+    const css = (HTML.match(/<style>([\s\S]*?)<\/style>/) || ['', ''])[1];
+    ok('layout: body가 화면 높이(100dvh) 앱 셸',
+      /body\s*\{[^}]*display:flex[^}]*flex-direction:column[^}]*height:100dvh/s.test(css));
+    ok('layout: main이 남는 높이를 차지하고 그 안에서 스크롤',
+      /main\s*\{[^}]*flex:1 1 auto[^}]*min-height:0[^}]*overflow-y:auto/s.test(css));
+    ok('layout: 무전기 탭이 세로 flex로 끝까지 늘어남',
+      /#view-chat\.on\s*\{[^}]*flex:1 1 auto[^}]*min-height:0/s.test(css));
+    ok('layout: 무전 카드가 flex 컬럼', /\.[\w.]*chatcard[^{]*\{[^}]*display:flex[^}]*flex-direction:column/s.test(css));
+    ok('layout: 무전 목록이 남는 높이를 전부 사용(고정 max-height 없음)',
+      /\.chat-scroll\s*\{[^}]*flex:1 1 auto/s.test(css) && !/\.chat-scroll\s*\{[^}]*max-height:min\(52vh/s.test(css));
+    ok('layout: 하단 탭바는 본문 흐름의 마지막(fixed 아님) + 안전영역',
+      /nav\.tabs\s*\{[^}]*position:relative/s.test(css) && /nav\.tabs\s*\{[^}]*var\(--safe-b\)/s.test(css));
   }
 
   console.log(results.join('\n'));
