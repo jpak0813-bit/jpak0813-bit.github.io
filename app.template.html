@@ -140,8 +140,6 @@ main{flex:1 1 auto; min-height:0; width:100%; max-width:960px; margin:0 auto; pa
 }
 @media(max-width:540px){
   #view-map.on{gap:8px}
-  .mapmeta{display:grid;grid-template-columns:1fr 1fr;gap:6px}
-  .mapmeta .pill{padding:6px 10px;text-align:center}
   .zone{padding:3px 6px;border-radius:9px;gap:2px}
   .zone .zn{font-size:9px}
   .actor .av{width:28px;height:28px;font-size:15px}
@@ -150,6 +148,11 @@ main{flex:1 1 auto; min-height:0; width:100%; max-width:960px; margin:0 auto; pa
 @media(min-width:760px){.mapwrap{max-width:720px;margin:0 auto}}
 .mapmeta{display:flex;flex-wrap:wrap;gap:6px}
 .mapmeta .pill{background:var(--panel2);border:1px solid var(--yellow-dim);border-radius:999px;padding:6px 11px;font-size:11.5px;color:var(--muted)}
+/* 모바일: 요약 4칸을 2×2로 고르게 — 줄바꿈으로 한 칸만 떨어지는 어색함 없이 */
+@media(max-width:540px){
+  .mapmeta{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .mapmeta .pill{text-align:center;padding:6px 8px}
+}
 /* 지금 오피스(상태판) — 카드가 남는 높이를 채우고 목록 줄이 고르게 늘어난다 */
 .nowcard{display:flex;flex-direction:column;flex:1 1 auto;min-height:208px}
 .nowlist{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;overflow-y:auto;scrollbar-width:thin}
@@ -398,7 +401,7 @@ const AUTH = {
 
 /* 라운지에서 쉬는 자리와 입구 — 대기 중이면 라운지로, 작업 중이면 자기 구역 책상으로 갑니다. */
 const LOUNGE_SEATS = [[57,63],[70,60],[82,64],[63,80],[75,78]];
-const LOUNGE_DOOR  = [[57,51],[63,48],[52,56]];
+const LOUNGE_DOOR  = [[50,48],[45,53],[55,47]];
 /* 스마트 오피스 4구역 — 내부 키(office/work/yard/break)는 RTDB·기존 데이터와 호환되게 그대로 둡니다.
    lx·ly = 지도 위 이름표 위치, spots = 캐릭터가 일할 때 서는 자리(지도 % 좌표). */
 const ZONES = {
