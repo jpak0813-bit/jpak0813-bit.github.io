@@ -5,7 +5,7 @@
  *   - @제미나이 즉답: 키 없음 안내 / 키 저장(localStorage) / 정상 호출 / 모델 폴백(404·503·429·망 지연) / 키 오류
  *   - @그록(Groq) 즉답: 칩·키 없음 안내 / localStorage 키 / OpenAI 호환 페이로드·Bearer 헤더 / 모델 폴백 / 키 오류
  *   - 키가 소스·Firebase 페이로드에 절대 섞이지 않는지
- *   - @Cue 인력·칩·"Cue한테 시킬 문구 복사"
+ *   - @Cue 연동 카드는 제거(Cue 플랫폼 웹훅 제약으로 명단에서 뺌)
  */
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
@@ -132,7 +132,7 @@ function fakeFirebase() {
 }
 
 (async () => {
-  /* ============ 1) 기본 앱 + 새 인력(제미나이·Cue) ============ */
+  /* ============ 1) 기본 앱 + 미니 캐릭터 ============ */
   {
     const { dom, w, d } = boot();
     await wait(160);
@@ -147,14 +147,17 @@ function fakeFirebase() {
     ok('map img data-uri', (d.querySelector('.mapwrap img').getAttribute('src') || '').startsWith('data:image/webp;base64,'));
     ok('4 zone badges', d.querySelectorAll('.zone').length === 4, String(d.querySelectorAll('.zone').length));
     ok('map lists 제미나이', d.querySelector('#view-map').textContent.includes('제미나이'));
-    ok('map lists Cue', d.querySelector('#view-map').textContent.includes('Cue'));
+    ok('map lists 그록', d.querySelector('#view-map').textContent.includes('그록'));
+    ok('map: Cue는 명단에서 빠짐', !d.querySelector('#view-map').textContent.includes('Cue')
+      && !d.querySelector('.actor[data-agent="cue"]'));
 
-    // 무전기: @제미나이 / @Cue 칩
+    // 무전기: @제미나이 / @그록 칩
     d.querySelector('.tab[data-tab="chat"]').click();
     await wait(40);
     const chips = [...d.querySelectorAll('[data-mention]')].map(b => b.dataset.mention);
     ok('chip @제미나이', chips.includes('제미나이'), chips.join(','));
-    ok('chip @Cue', chips.includes('Cue'), chips.join(','));
+    ok('chip @그록', chips.includes('그록'), chips.join(','));
+    ok('chip @Cue 없음', !chips.includes('Cue'), chips.join(','));
     ok('welcome message', d.querySelector('#view-chat').textContent.includes('현장 사무소 개설 완료'));
     ok('chat: 무전 목록이 남는 높이를 채우는 카드', !!d.querySelector('#view-chat .chatcard .chat-scroll'));
     dom.window.close();
@@ -1058,26 +1061,44 @@ function fakeFirebase() {
     dom.window.close();
   }
 
-  /* ============ 6) @Cue 문구 복사 (Firebase RTDB 모드 · 로그인 없이 auth=off) ============ */
+  /* ============ 6) Cue 제거 — 카드·문구·명단·저장된 기록까지 ============ */
   {
-    const { dom, d, copied } = boot({ url: 'https://example.test/?room=nogada01&auth=off' });
-    await wait(160);
+    const withCue = (call) => {
+      if (call.method === 'GET' && !/\/agents\/|\/messages\/|\/tasks\//.test(call.url)) {
+        return { ok: true, json: async () => ({
+          agents: {
+            roen: { id: 'roen', name: '로엔', role: '현장소장', emoji: '🦺', status: '대기중', zone: 'office', updatedAt: 10 },
+            binna: { id: 'binna', name: '박빈나 피클', role: '안전/일정반장', emoji: '🧡', status: '합류대기', zone: 'break', updatedAt: 10 },
+            cue: { id: 'cue', name: 'Cue', role: '외부 첩보반장', emoji: '🕶️', status: '대기중', zone: 'yard', updatedAt: 10 }
+          }, tasks: {}, messages: {}
+        }) };
+      }
+      return { ok: true, json: async () => ({}) };
+    };
+    const { dom, w, d, copied, fbCalls } = boot({
+      url: 'https://example.test/?room=nogada01&auth=off',
+      fbResponder: withCue,
+      storage: { 'nogada.state': { agents: { cue: { id:'cue', name:'Cue', status:'대기중', zone:'yard', updatedAt: 5 } }, tasks: {}, at: 1 } }
+    });
+    await wait(220);
     d.querySelector('[data-me="jingyu"]').click();
-    await wait(30);
-    d.querySelector('.tab[data-tab="crew"]').click();
-    await wait(40);
-    ok('cue card present', d.querySelector('#view-crew').textContent.includes('Cue한테 시킬 문구'));
-    ok('cue agent in crew', d.querySelector('#view-crew').textContent.includes('외부 첩보반장'));
-    d.querySelector('#cueCopyBtn').click();
     await wait(60);
-    const text = copied[0] || '';
-    ok('cue prompt copied', text.length > 100, 'len=' + text.length);
-    ok('cue prompt: GET messages url', text.includes('GET ' + FB + '/rooms/nogada01/messages.json'));
-    ok('cue prompt: POST messages url', text.includes('POST ' + FB + '/rooms/nogada01/messages.json'));
-    ok('cue prompt: from cue', text.includes('"from":"cue"'));
-    ok('cue prompt: name Cue', text.includes('"name":"Cue"'));
-    ok('cue prompt: emoji 🕶️', text.includes('"emoji":"🕶️"'));
-    ok('cue prompt: @Cue mention rule', text.includes('@Cue'));
+    d.querySelector('.tab[data-tab="crew"]').click();
+    await wait(80);
+    ok('cue: 인력 현황에 Cue 카드 없음', !d.querySelector('#view-crew').textContent.includes('Cue한테 시킬 문구'));
+    ok('cue: Cue 연동 카드 없음', !d.querySelector('#view-crew').textContent.includes('외부 첩보반장'));
+    ok('cue: 문구 복사 버튼 없음', !d.querySelector('#cueCopyBtn'));
+    ok('cue: 외부 봇 안내에서도 Cue 빠짐', !d.querySelector('#view-crew').textContent.includes('Cue 등)'));
+    ok('cue: 저장된 명단·서버 기록에 있어도 화면에 없음', w.eval("!S.agents.cue")
+      && !d.querySelector('.actor[data-agent="cue"]'));
+    d.querySelector('.tab[data-tab="map"]').click();
+    await wait(80);
+    ok('cue: 지도 캐릭터는 4명', d.querySelectorAll('.actor').length === 4, String(d.querySelectorAll('.actor').length));
+    ok('cue: 출근 인원 4명으로 집계', d.querySelector('#view-map').textContent.includes('출근 4명'),
+      d.querySelector('#view-map').textContent.slice(0, 60));
+    ok('cue: RTDB에 cue를 다시 쓰지 않음(삭제·되쓰기 없음)',
+      !fbCalls.some(c => c.method !== 'GET' && c.url.includes('/agents/cue')));
+    ok('cue: 복사 API는 호출되지 않음', copied.length === 0);
     dom.window.close();
   }
 
@@ -1106,11 +1127,8 @@ function fakeFirebase() {
     ok('auth: 인력 현황에 계정 카드', d.querySelector('#view-crew').textContent.includes('현장주 계정'));
     ok('auth: 로그아웃 버튼', !!d.querySelector('#authOutBtn'));
     ok('auth: 현장주에게만 허용 이메일 추가칸', !!d.querySelector('#allowEmail'));
-
-    d.querySelector('#cueCopyBtn').click();
-    await wait(60);
-    ok('auth: Cue 문구에 로그인 토큰 포함', String(copied[0] || '').includes('auth=test-id-token'));
-    ok('auth: Cue 문구에 토큰 만료 안내', String(copied[0] || '').includes('401'));
+    ok('auth: 외부 봇 연결 예시에 로그인 토큰 안내', d.querySelector('#view-crew').textContent.includes('?auth=<Google 로그인 토큰>')
+      || d.querySelector('#view-crew').textContent.includes('auth='));
 
     d.querySelector('#authOutBtn').click();
     await wait(100);
@@ -1187,7 +1205,7 @@ function fakeFirebase() {
     await wait(60);
 
     const actors = [...d.querySelectorAll('.actor')];
-    ok('map: 캐릭터 5명이 지도 위에 렌더', actors.length === 5, String(actors.length));
+    ok('map: 캐릭터 4명이 지도 위에 렌더(Cue 제외)', actors.length === 4, String(actors.length));
     ok('map: 캐릭터마다 data-agent·data-state·좌표',
       actors.every(a => a.dataset.agent && a.dataset.state && a.style.left && a.style.top));
 
@@ -1214,17 +1232,17 @@ function fakeFirebase() {
     const roenBack = d.querySelector('.actor[data-agent="roen"]');
     ok('map: 다시 대기중이면 라운지로 복귀', roenBack.classList.contains('idle') && parseFloat(roenBack.style.left) > 50, roenBack.style.left);
 
-    w.eval("S.agents.cue.status='식사중'; render();");
+    w.eval("S.agents.groq.status='식사중'; render();");
     await wait(60);
-    const cueEat = d.querySelector('.actor[data-agent="cue"]');
+    const cueEat = d.querySelector('.actor[data-agent="groq"]');
     ok('map: 식사중 → eating + 🍽️', cueEat.classList.contains('eating') && cueEat.querySelector('.bd').textContent === '🍽️', cueEat.className);
 
-    d.querySelector('.actor[data-agent="cue"]').click();
+    d.querySelector('.actor[data-agent="groq"]').click();
     await wait(40);
     const toastEl = d.querySelector('#toast');
     ok('map: 캐릭터를 누르면 상태 토스트',
-      toastEl.classList.contains('on') && toastEl.textContent.includes('Cue') && toastEl.textContent.includes('식사중'), toastEl.textContent);
-    ok('map: 누른 캐릭터가 잠깐 강조(sel)', d.querySelector('.actor[data-agent="cue"]').classList.contains('sel'));
+      toastEl.classList.contains('on') && toastEl.textContent.includes('그록') && toastEl.textContent.includes('식사중'), toastEl.textContent);
+    ok('map: 누른 캐릭터가 잠깐 강조(sel)', d.querySelector('.actor[data-agent="groq"]').classList.contains('sel'));
 
     d.querySelector('.actor[data-agent="roen"]').click();
     await wait(40);
@@ -1253,11 +1271,11 @@ function fakeFirebase() {
     await wait(80);
 
     const chars = [...d.querySelectorAll('.actor .ch')];
-    ok('char: 지도 위 5명이 모두 SVG 캐릭터', chars.length === 5, String(chars.length));
+    ok('char: 지도 위 4명이 모두 SVG 캐릭터', chars.length === 4, String(chars.length));
     ok('char: 이모지 원(.actor .av)이 사라짐', !d.querySelector('.actor .av'));
     const ids = chars.map(c => c.getAttribute('data-char'));
-    ok('char: 로엔·빈나·제미나이·Cue·그록 5종',
-      ['roen', 'binna', 'gemini', 'cue', 'groq'].every(id => ids.includes(id)), ids.join(','));
+    ok('char: 로엔·빈나·제미나이·그록 4종',
+      ['roen', 'binna', 'gemini', 'groq'].every(id => ids.includes(id)) && !ids.includes('cue'), ids.join(','));
     ok('char: 캐릭터마다 머리·눈·양팔 그룹', chars.every(c =>
       c.querySelector('.ch-bob') && c.querySelector('.ch-head') && c.querySelector('.ch-eyes')
       && c.querySelector('.ch-armL') && c.querySelector('.ch-armR') && c.querySelector('.ch-shadow')));
@@ -1272,18 +1290,16 @@ function fakeFirebase() {
       html('binna').includes('#ff9d86') && html('binna').includes('#ff4f76') && html('binna').includes('#fffaf0'));
     ok('char: 제미나이 = 하늘색 로봇 + 빛나는 안테나 + 화면 눈',
       html('gemini').includes('#9fdcff') && html('gemini').includes('#7ff0ff') && html('gemini').includes('#12283a'));
-    ok('char: Cue = 정장 + 선글라스',
-      html('cue').includes('#2a3244') && html('cue').includes('#12161f') && html('cue').includes('#cf3b52'));
     ok('char: 그록 = 호박색 후드 + 번개',
       html('groq').includes('#ffb200') && html('groq').includes('#3a2600'));
 
     d.querySelector('.tab[data-tab="crew"]').click();
     await wait(80);
-    ok('char: 인력 카드도 캐릭터로 표시', d.querySelectorAll('.agent .av .ch').length === 5,
+    ok('char: 인력 카드도 캐릭터로 표시', d.querySelectorAll('.agent .av .ch').length === 4,
       String(d.querySelectorAll('.agent .av .ch').length));
     d.querySelector('.tab[data-tab="map"]').click();
     await wait(80);
-    ok('char: 지금 오피스 목록도 캐릭터로 표시', d.querySelectorAll('.nowrow .nav .ch').length === 5);
+    ok('char: 지금 오피스 목록도 캐릭터로 표시', d.querySelectorAll('.nowrow .nav .ch').length === 4);
     d.querySelector('.tab[data-tab="chat"]').click();
     await wait(80);
     ok('char: 무전기 칩에도 캐릭터', d.querySelectorAll('.quick .chip .ch').length >= 3);

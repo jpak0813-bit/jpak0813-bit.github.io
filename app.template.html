@@ -485,12 +485,14 @@ const SEED_AGENTS = {
   roen:  { id:'roen',  name:'로엔', role:'현장소장', emoji:'🦺', status:'대기중', zone:'office' },
   binna: { id:'binna', name:'박빈나 피클', role:'안전/일정반장', emoji:'🧡', status:'합류대기', zone:'break' },
   gemini:{ id:'gemini', name:'제미나이', role:'설계/기술 자문', emoji:'🤖', status:'대기중', zone:'work' },
-  groq:  { id:'groq',  name:'그록', role:'초고속 AI 비서', emoji:'⚡', status:'대기중', zone:'office' },
-  cue:   { id:'cue',   name:'Cue', role:'외부 첩보반장', emoji:'🕶️', status:'대기중', zone:'yard' }
+  groq:  { id:'groq',  name:'그록', role:'초고속 AI 비서', emoji:'⚡', status:'대기중', zone:'office' }
 };
+/* Cue(🕶️)는 Cue 플랫폼의 웹훅 제약으로 무전방에 들어올 수 없어 명단에서 뺐습니다.
+   예전에 저장된 명단·서버 기록에 cue가 남아 있어도 화면·집계에는 넣지 않습니다. */
+const RETIRED_AGENTS = ['cue'];
 
 /* ---------- 미니 캐릭터(SVG) ----------
-   지도·인력 카드·무전기·상태판에 함께 쓰는 5종 미니 캐릭터(로엔·박빈나·제미나이·Cue·그록)와
+   지도·인력 카드·무전기·상태판에 함께 쓰는 미니 캐릭터(로엔·박빈나·제미나이·그록)와
    이름을 바꾸거나 새로 투입한 인력용 기본 캐릭터. 이모지 원 대신 직접 그린 SVG라
    어떤 크기에서도 또렷하고, CSS로 숨쉬기·고개 갸웃·깜빡임·걷기·손흔들기 애니메이션이 붙습니다.
    구조: <svg class="ch"><ellipse ch-shadow/><g class="ch-flip"><g class="ch-bob">…</g></g></svg>
@@ -591,7 +593,7 @@ const CHAR_DRAW = {
     + '</g>';
   },
 
-  /* Cue — 검은 정장 + 선글라스 첩보 요원 */
+  /* Cue — 지금은 명단에서 빠졌지만(플랫폼 웹훅 제약) 그림은 남겨 둡니다: 다시 부를 때 그대로 */
   cue(){ return ''
     + '<g class="ch-legs"><rect x="21" y="46" width="5.6" height="11.4" rx="2.6" fill="#232a39"/>'
     + '<rect x="29.4" y="46" width="5.6" height="11.4" rx="2.6" fill="#232a39"/>'
@@ -687,18 +689,17 @@ function charSvg(a){
 
 const WELCOME = {
   id:'m-welcome-01', from:'roen', name:'로엔', emoji:'🦺', sys:false,
-  text:'🚧 현장 사무소 개설 완료! @로엔 · @빈나 · @제미나이 · @그록 · @Cue 로 불러주세요.\n급한 건은 무전기에 남겨주세요, 소장이 바로 달려갑니다.', ts:0
+  text:'🚧 현장 사무소 개설 완료! @로엔 · @빈나 · @제미나이 · @그록 로 불러주세요.\n급한 건은 무전기에 남겨주세요, 소장이 바로 달려갑니다.', ts:0
 };
 
 /* ---------- 인력(봇) 이름 ----------
-   로엔·박빈나·제미나이·Cue·그록은 이름을 바꿔도 부르던 이름(@제미나이·@gemini …)을
+   로엔·박빈나·제미나이·그록은 이름을 바꿔도 부르던 이름(@제미나이·@gemini …)을
    그대로 두고, 새 이름(@새이름)도 함께 알아듣습니다. 이름·직책은 agents/{id}에 저장됩니다. */
 const AGENT_ALIASES = {
   roen:   ['로엔', 'roen'],
   binna:  ['박빈나 피클', '박빈나', '빈나', 'binna'],
   gemini: ['제미나이', 'gemini'],
-  groq:   ['그록', 'groq'],
-  cue:    ['cue']
+  groq:   ['그록', 'groq']
 };
 function agentById(id){
   try{ if(S && S.agents && S.agents[id]) return S.agents[id]; }catch(e){}
@@ -1037,6 +1038,7 @@ function applyNameMemo(a){
 /* ---------- 상태 반영 ---------- */
 function applyRemoteAgent(id, a){
   if(!a) return;
+  if(RETIRED_AGENTS.indexOf(id) >= 0) return;
   a.id = id;
   const c = S.agents[id];
   /* 이름·직책은 편집 시각이 더 최신인 쪽을 남깁니다 — 다른 기기의 낡은 상태(기본 이름)가
@@ -1384,9 +1386,9 @@ function removeAgent(id){
   delete S.agents[id]; render(); persistState();
   Wire.push({ t:'del-agent', ts: now(), d:{ id } }).catch(()=>{});
 }
-/* 제미나이·그록·Cue는 어느 현장(방)에나 상주합니다. 명단에 없으면 다시 투입합니다.
+/* 제미나이·그록은 어느 현장(방)에나 상주합니다. 명단에 없으면 다시 투입합니다.
    단, 첫 동기화(pull) 전에는 DB에 쓰지 않습니다. 저장된 새 이름을 기본 이름으로 덮어쓰지 않게. */
-const CORE_AGENTS = ['gemini', 'groq', 'cue'];
+const CORE_AGENTS = ['gemini', 'groq'];
 function ensureCoreAgents(){
   let changed = false;
   CORE_AGENTS.forEach(id => {
@@ -1622,7 +1624,7 @@ function renderChat(){
   const typing = (S.geminiBusy ? typingHtml('gemini') : '') + (S.groqBusy ? typingHtml('groq') : '');
 
   /* 멘션 칩 — 지금 부르는 이름 그대로. 이름을 바꾸면 칩도 새 이름으로 바뀝니다. */
-  const chipIds = ['gemini', 'groq', 'cue', 'roen'].filter(id => S.agents[id]);
+  const chipIds = ['gemini', 'groq', 'roen'].filter(id => S.agents[id]);
   Object.keys(S.agents).forEach(id => { if(chipIds.indexOf(id) < 0) chipIds.push(id); });
   const chips = chipIds.slice(0, 8)
     .map(id => '<button class="chip" data-mention="' + esc(agentName(id)) + '">'
@@ -1824,11 +1826,10 @@ function renderCrew(){
     + geminiCardHtml()
     + groqCardHtml()
     + tavilyCardHtml()
-    + cueCardHtml()
     + authCardHtml()
     + '<button class="btn ghost" id="addAgentBtn" style="width:100%;margin-top:10px">＋ 인력 · 봇 추가</button>'
     + '<button class="btn ghost" id="shareBtn" style="width:100%;margin-top:8px">🔗 현장 초대 링크 복사</button>'
-    + '<details class="help"><summary>🔌 외부 봇(제미나이·그록·Cue 등) 연결 방법</summary>'
+    + '<details class="help"><summary>🔌 외부 봇(제미나이·그록 등) 연결 방법</summary>'
     +   '<div class="body">'
     +     '<div>현재 채널: <b>' + (Wire.mode === 'rtdb' ? 'Firebase RTDB' : '임시 ntfy 중계') + '</b></div>'
     +     '<div style="margin-top:4px;word-break:break-all">' + esc(ep) + '</div>'
@@ -1841,8 +1842,6 @@ function renderCrew(){
   if($('#geminiKeyBtn')) $('#geminiKeyBtn').addEventListener('click', openGeminiKey);
   if($('#groqKeyBtn')) $('#groqKeyBtn').addEventListener('click', openGroqKey);
   if($('#tavilyKeyBtn')) $('#tavilyKeyBtn').addEventListener('click', openTavilyKey);
-  if($('#cueCopyBtn')) $('#cueCopyBtn').addEventListener('click', ()=> copyText(cuePrompt(), '📋 Cue한테 시킬 문구를 복사했습니다'));
-  if($('#cueAddrBtn')) $('#cueAddrBtn').addEventListener('click', ()=> copyText(cuePrompt(), '무전 주소·문구를 복사했습니다'));
   if($('#authOutBtn')) $('#authOutBtn').addEventListener('click', signOutApp);
   if($('#allowAdd')) $('#allowAdd').addEventListener('click', async ()=>{
     const v = ($('#allowEmail').value || '').trim();
@@ -1879,7 +1878,7 @@ function renderCrew(){
 }
 
 /* =========================================================
-   제미나이(@제미나이) 즉답 · Cue(@Cue) 연동
+   제미나이(@제미나이) 즉답 · 그록(@그록) 즉답
    - 키는 this 브라우저 localStorage 에만 저장(공개 코드·DB 금지)
    ========================================================= */
 function geminiKey(){
@@ -1934,100 +1933,6 @@ function tavilyCardHtml(){
     +   '<span class="statuspill ' + (key ? 'st-준비' : 'st-대기중') + '">' + (key ? '웹 검색 연결됨 · ' + esc(maskKey(key)) : '미설정 · 월 1,000건 무료') + '</span></div>'
     + '<button class="btn" id="tavilyKeyBtn" style="width:100%;margin-top:10px">🔍 Tavily 검색 API 키 설정</button>'
     + '</div>';
-}
-
-function lastCueTs(){
-  let t = 0;
-  Object.values(S.messages).forEach(m => { if(m.from === 'cue' && (m.ts || 0) > t) t = m.ts; });
-  return t;
-}
-function cueCardHtml(){
-  const ts = lastCueTs();
-  const locked = AUTH.required;
-  return '<div class="card aicard" style="margin-top:10px">'
-    + '<div class="sec-title">🕶️ Cue 연동 <span class="tiny muted" style="font-weight:600">외부 첩보반장</span><span class="line"></span></div>'
-    + '<div class="tiny muted" style="margin-bottom:9px">Cue는 진규 님 Cue 앱에서 움직입니다. 아래 문구를 Cue에게 붙여넣으면 무전방을 읽고, <b>@Cue</b> 가 불릴 때 🕶️ Cue 이름으로 답을 올립니다.'
-    +   (locked ? ' <b>보안 적용</b>으로 로그인 열쇠(auth= 토큰)가 문구에 함께 들어가고, 약 1시간마다 다시 복사해야 합니다.' : '')
-    + '</div>'
-    + '<div class="stline">'
-    +   '<span class="statuspill ' + (ts ? 'st-준비' : 'st-대기중') + '">' + (ts ? '마지막 무전 ' + ago(ts) : '아직 무전 없음') + '</span>'
-    +   '<span class="statuspill st-대기중">' + (Wire.mode === 'rtdb' ? 'Firebase RTDB' : 'ntfy 중계') + '</span>'
-    +   (locked ? '<span class="statuspill st-준비">로그인 전용</span>' : '') + '</div>'
-    + '<button class="btn" id="cueCopyBtn" style="width:100%;margin-top:10px">📋 Cue한테 시킬 문구 복사</button>'
-    + '</div>';
-}
-
-function cuePrompt(){
-  const base = CFG.rtdbUrl ? CFG.rtdbUrl.replace(/\/+$/, '') : '';
-  if(!base){
-    return '[노가다 현장 비서실 · Cue 첨보반장]\n'
-      + '지금 이 현장은 임시 중계(ntfy) 모드입니다. 실시간 채널: https://ntfy.sh/' + CFG.ntfyTopic + '\n'
-      + '무전 읽기: GET https://ntfy.sh/' + CFG.ntfyTopic + '/json?poll=1\n'
-      + '답장 올리기: POST https://ntfy.sh/' + CFG.ntfyTopic + ' (body: {"t":"msg","d":{"id":"m-cue-<번호>","from":"cue","name":"Cue","emoji":"🕶️","text":"<답장>","ts":<현재 ms>}})\n'
-      + '규칙: @Cue 또는 @cue 가 들어온 최신 무전에만, 한 번만 답장. 한국어 2~4문장, 현장 반장 말투.';
-  }
-  const authQ = AUTH.token ? ('?auth=' + AUTH.token) : '';
-  const readUrl = base + '/rooms/' + CFG.room + '/messages.json' + authQ;
-  const postUrl  = base + '/rooms/' + CFG.room + '/messages.json' + authQ;
-  return [
-    "너는 '노가다 현장 합동 비서실' 무전방에 있는 외부 첩보반장 Cue(🕶️)야. 아래 규칙대로만 움직여.",
-    '',
-    '[0] 보안 (2026-11-27 변경)',
-    '이 무전방은 Google 로그인 사용자만 읽고 쓸 수 있어. 아래 주소 끝의 auth= 토큰이 그 열쇠야.',
-    '- 토큰은 약 1시간 뒤 만료돼. 401 Permission denied 가 나오면 사용자가 노가다 비서실 → 인력 현황 → 📋 Cue한테 시킬 문구 복사를 다시 눌러 새 문구를 줄 거야.',
-    '- 토큰을 다른 곳에 올리거나 공유하지 마.',
-    '',
-    '[1] 무전 읽기 (1분마다, 또는 시킬 때마다)',
-    'GET ' + readUrl,
-    '→ {"m-xxx":{"id","from","name","emoji","text","ts"}, ...} 형태의 JSON이야.',
-    '',
-    '[2] 내가 불렸는지 확인',
-    '- 최신 무전 5개를 ts 순으로 읽고, text에 "@Cue" 또는 "@cue"가 들어간 무전을 찾아.',
-    '- 그 무전에 이미 from:"cue"인 내 답장이 있으면 또 답하지 마.',
-    '- 부르는 무전이 없으면 아무것도 올리지 마.',
-    '',
-    '[3] 답장 올리기 (POST)',
-    'POST ' + postUrl,
-    'Content-Type: application/json',
-    '{"id":"m-cue-<겹치지 않는 번호>","from":"cue","name":"Cue","emoji":"🕶️","text":"<답장 내용>","ts":<현재 시각 epoch ms>}',
-    '- id는 매번 새로 (m-cue- + 시간 + 임의숫자).',
-    '- from은 반드시 "cue", name은 "Cue", emoji는 "🕶️" 그대로. (바꾸면 현장에 다른 사람으로 뜸)',
-    '- ts는 현재 epoch milliseconds (예: 1795769859782).',
-    '',
-    '[4] 말투',
-    '- 한국어, 현장 반장 말투로 짧게 2~4문장. 결론부터.',
-    '- 첩보·조사가 필요한 건 "확인해서 바로 올리겠습니다"처럼 하고, 실제로 확인한 것만 말해.',
-    '- 확인 안 된 수치·규정은 지어내지 마. 비밀번호·개인정보는 절대 올리지 마.',
-    '',
-    '지금 [1]을 한 번 돌려서, 나를 부르는 무전이 있으면 [3]으로 답해줘.'
-  ].join('\n');
-}
-
-async function copyText(text, okMsg){
-  try{
-    if(navigator.clipboard && navigator.clipboard.writeText){
-      await navigator.clipboard.writeText(text);
-      toast(okMsg); return true;
-    }
-  }catch(e){}
-  try{
-    const ta = document.createElement('textarea');
-    ta.value = text; ta.setAttribute('readonly', '');
-    ta.style.position = 'fixed'; ta.style.top = '-1000px'; ta.style.opacity = '0';
-    document.body.appendChild(ta); ta.select();
-    try{ ta.setSelectionRange(0, text.length); }catch(e){}
-    const ok = document.execCommand && document.execCommand('copy');
-    document.body.removeChild(ta);
-    if(ok){ toast(okMsg); return true; }
-  }catch(e){}
-  openSheet(
-    '<h3>📋 복사할 문구</h3>'
-    + '<p class="desc">자동 복사가 막혀 있습니다. 아래 문구를 길게 눌러 전체 선택 → 복사한 뒤 Cue에게 붙여넣어 주세요.</p>'
-    + '<pre class="code" style="max-height:46vh;overflow:auto;white-space:pre-wrap">' + esc(text) + '</pre>'
-    + '<button class="btn" id="cpClose" style="width:100%;margin-top:10px">닫기</button>'
-  );
-  if($('#cpClose')) $('#cpClose').addEventListener('click', closeSheet);
-  return false;
 }
 
 function buildGeminiPrompt(msg){
@@ -2860,7 +2765,7 @@ function openAddAgent(){
   openSheet(
     '<h3>＋ 인력 · 봇 추가</h3>'
     + '<p class="desc">가족·동료·다른 AI 비서를 현장에 부를 수 있습니다.</p>'
-    + '<div class="fld"><label>이름</label><input type="text" id="naName" placeholder="예: 제미나이 / Cue / 박세은"></div>'
+    + '<div class="fld"><label>이름</label><input type="text" id="naName" placeholder="예: 제미나이 / 박세은"></div>'
     + '<div class="fld"><label>직책</label><input type="text" id="naRole" placeholder="예: 자재검수반장"></div>'
     + '<div class="fld"><label>이모지</label><input type="text" id="naEmoji" placeholder="예: 🤖" maxlength="4" value="🤖"></div>'
     + '<div class="row" style="gap:10px">'
@@ -2971,6 +2876,8 @@ function afterAuth(){
   if(Object.keys(S.agents).length === 0){
     for(const k in SEED_AGENTS) S.agents[k] = applyNameMemo(Object.assign({}, SEED_AGENTS[k], { updatedAt: 1 }));
   }
+  /* 저장된 명단(localStorage)에 남아 있는 퇴역 인력(Cue 등)은 빼고 시작합니다. */
+  RETIRED_AGENTS.forEach(id => { delete S.agents[id]; });
   Object.values(S.agents).forEach(rememberName);
   if(!S.messages[WELCOME.id]) S.messages[WELCOME.id] = Object.assign({}, WELCOME, { ts: now() - 120000 });
   ensureCoreAgents();

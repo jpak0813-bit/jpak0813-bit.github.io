@@ -37,15 +37,6 @@
           "status": "대기중",
           "zone": "office",
           "updatedAt": 1764229000000
-        },
-        "cue": {
-          "id": "cue",
-          "name": "Cue",
-          "role": "외부 첩보반장",
-          "emoji": "🕶️",
-          "status": "대기중",
-          "zone": "yard",
-          "updatedAt": 1764229000000
         }
       },
       "messages": {
