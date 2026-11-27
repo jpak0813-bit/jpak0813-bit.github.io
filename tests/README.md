@@ -15,6 +15,7 @@ npm test
   - 폴백 순서 `gemini-2.5-flash → gemini-2.5-flash-lite → gemini-2.0-flash → gemini-flash-latest`
   - 404(모델 없음) · **503(수요 폭주)** · 429(한도) · 망 지연/시간초과에도 다음 모델로 넘어가 답을 찾는지
   - 4개가 모두 503이면 안내 무전 1건만 올리고 상태가 `대기중`으로 돌아오는지
+  - 400이어도 `thinkingConfig` 같은 파라미터를 모르는 모델이면 다음 모델로 넘어가는지(2.5→3.x 자동 라우팅 대비)
   - 2.5 계열 요청에만 `thinkingConfig.thinkingBudget=0`이 붙고 2.0 계열에는 없는지(400 방지)
 - 보안: API 키가 어떤 외부 페이로드(ntfy/Firebase)에도 실리지 않는지
 - `@Cue`: 인력 카드 · 복사 문구에 Firebase `GET/POST .../messages.json` 주소와 `from:"cue", name:"Cue", emoji:"🕶️"` 규칙이 들어 있는지

@@ -313,6 +313,34 @@ function boot(opts = {}) {
     dom.window.close();
   }
 
+  /* ============ 4-F) 400 파라미터 거절(thinkingConfig 모름)도 다음 모델로 ============ */
+  {
+    const { dom, w, d, published, geminiCalls } = boot({
+      geminiResponder: (call) => {
+        if (call.url.includes('gemini-2.5-flash')) {
+          return { ok: false, status: 404, json: async () => ({ error: { code: 404, status: 'NOT_FOUND', message: 'model not found' } }) };
+        }
+        if (call.url.includes('gemini-2.0-flash')) {
+          return { ok: false, status: 400, json: async () => ({ error: { code: 400, status: 'INVALID_ARGUMENT', message: 'Unknown name "thinkingConfig": Cannot find field.' } }) };
+        }
+        return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: '파라미터 거절 뚫고 답했습니다.' }] } }] }) };
+      }
+    });
+    await wait(160);
+    d.querySelector('[data-me="jingyu"]').click();
+    await wait(30);
+    w.localStorage.setItem('nogada_gemini_api_key', FAKE_KEY);
+    d.querySelector('.tab[data-tab="chat"]').click();
+    await wait(30);
+    d.querySelector('#msgInput').value = '@제미나이 파라미터 테스트';
+    d.querySelector('#sendBtn').click();
+    await wait(2000);
+    const reply = published.filter(p => p.t === 'msg' && p.d.from === 'gemini').pop();
+    ok('400 파라미터: 다음 모델로 넘어가 답장', !!reply && reply.d.model === 'gemini-flash-latest'
+      && reply.d.text.includes('파라미터 거절'), (reply && reply.d.model) || 'none');
+    dom.window.close();
+  }
+
   /* ============ 5) 키 오류 처리 ============ */
   {
     const { dom, w, d, published } = boot({

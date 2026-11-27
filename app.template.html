@@ -1072,9 +1072,12 @@ async function geminiFetch(promptText, key){
         throw { kind: 'perm', userMessage: '🚫 이 키로는 호출 권한이 없습니다(403). Google AI Studio에서 키 상태·생성형 언어 API 사용 설정을 확인해 주세요.' };
       }
 
-      /* 404(모델 없음) · 429(한도) · 503(과부하) · 5xx(일시 장애) → 다음 모델로 재시도 */
+      /* 404(모델 없음) · 429(한도) · 503(과부하) · 5xx(일시 장애) → 다음 모델로 재시도
+         400이어도 thinkingConfig·generationConfig 같은 파라미터를 모르는 모델이면 다음 모델로 넘긴다
+         (2.5 → 3.x 자동 라우팅처럼 모델 쪽이 바뀌어도 여기서 살아난다) */
       const retriable = GEMINI_RETRY_STATUS.indexOf(status) >= 0
-        || /high demand|overloaded|unavailable|resource[ _]?exhausted|rate limit|try again later|not[ _]?found|not supported|does not exist|unknown model|internal error/i.test(msg);
+        || /high demand|overloaded|unavailable|resource[ _]?exhausted|rate limit|try again later|not[ _]?found|not supported|does not exist|unknown model|internal error/i.test(msg)
+        || (status === 400 && /thinking|generation_?config|unknown (name|field)|unsupported/i.test(msg));
       if(!retriable){
         throw { kind: 'api', userMessage: '🤖 제미나이 호출이 실패했습니다(' + status + '). ' + msg.slice(0, 120) };
       }
