@@ -94,6 +94,9 @@ function boot(opts = {}) {
       };
       window.confirm = () => true;
       if (opts.firebase) window.firebase = opts.firebase;
+      if (opts.storage) {
+        Object.keys(opts.storage).forEach(k => window.localStorage.setItem(k, JSON.stringify(opts.storage[k])));
+      }
       window.requestAnimationFrame = cb => setTimeout(() => cb(0), 0);
       window.scrollTo = () => {};
       Object.defineProperty(window.navigator, 'clipboard', {
@@ -1239,6 +1242,215 @@ function fakeFirebase() {
     await wait(40);
     ok('map: 구역을 누르면 기존 구역 시트가 열림',
       d.querySelector('#overlay').classList.contains('on') && d.querySelector('#sheet').textContent.includes('리서치 존'));
+    dom.window.close();
+  }
+
+  /* ============ 9) 미니 캐릭터(SVG) — 이모지 원 대신 5종 캐릭터 ============ */
+  {
+    const { dom, w, d } = boot();
+    await wait(180);
+    d.querySelector('[data-me="jingyu"]').click();
+    await wait(80);
+
+    const chars = [...d.querySelectorAll('.actor .ch')];
+    ok('char: 지도 위 5명이 모두 SVG 캐릭터', chars.length === 5, String(chars.length));
+    ok('char: 이모지 원(.actor .av)이 사라짐', !d.querySelector('.actor .av'));
+    const ids = chars.map(c => c.getAttribute('data-char'));
+    ok('char: 로엔·빈나·제미나이·Cue·그록 5종',
+      ['roen', 'binna', 'gemini', 'cue', 'groq'].every(id => ids.includes(id)), ids.join(','));
+    ok('char: 캐릭터마다 머리·눈·양팔 그룹', chars.every(c =>
+      c.querySelector('.ch-bob') && c.querySelector('.ch-head') && c.querySelector('.ch-eyes')
+      && c.querySelector('.ch-armL') && c.querySelector('.ch-armR') && c.querySelector('.ch-shadow')));
+    ok('char: 이름표는 첫 단어', d.querySelector('.actor[data-agent="binna"] .nm').textContent === '박빈나',
+      d.querySelector('.actor[data-agent="binna"] .nm').textContent);
+
+    const html = id => d.querySelector('.actor[data-agent="' + id + '"] .ch').outerHTML;
+    ok('char: 로엔 = 초록 피클 + 노란 안전모 + 주황 조끼 + ㄹ',
+      html('roen').includes('#8ad25e') && html('roen').includes('#ffc61e')
+      && html('roen').includes('#ff8a2b') && html('roen').includes('h11.2v4.6'));
+    ok('char: 빈나 = 복숭아 피클 + 하트 배지 + 클립보드',
+      html('binna').includes('#ff9d86') && html('binna').includes('#ff4f76') && html('binna').includes('#fffaf0'));
+    ok('char: 제미나이 = 하늘색 로봇 + 빛나는 안테나 + 화면 눈',
+      html('gemini').includes('#9fdcff') && html('gemini').includes('#7ff0ff') && html('gemini').includes('#12283a'));
+    ok('char: Cue = 정장 + 선글라스',
+      html('cue').includes('#2a3244') && html('cue').includes('#12161f') && html('cue').includes('#cf3b52'));
+    ok('char: 그록 = 호박색 후드 + 번개',
+      html('groq').includes('#ffb200') && html('groq').includes('#3a2600'));
+
+    d.querySelector('.tab[data-tab="crew"]').click();
+    await wait(80);
+    ok('char: 인력 카드도 캐릭터로 표시', d.querySelectorAll('.agent .av .ch').length === 5,
+      String(d.querySelectorAll('.agent .av .ch').length));
+    d.querySelector('.tab[data-tab="map"]').click();
+    await wait(80);
+    ok('char: 지금 오피스 목록도 캐릭터로 표시', d.querySelectorAll('.nowrow .nav .ch').length === 5);
+    d.querySelector('.tab[data-tab="chat"]').click();
+    await wait(80);
+    ok('char: 무전기 칩에도 캐릭터', d.querySelectorAll('.quick .chip .ch').length >= 3);
+
+    const css = (HTML.match(/<style>([\s\S]*?)<\/style>/) || ['', ''])[1];
+    ok('char: 지도 캐릭터 40×46(모바일)', /\.actor \.chwrap\s*\{[^}]*width:40px[^}]*height:46px/s.test(css));
+    ok('char: 숨쉬기·고개·깜빡임·걷기 키프레임',
+      /@keyframes chBreathe/.test(css) && /@keyframes chTilt/.test(css) && /@keyframes chBlink/.test(css)
+      && /@keyframes chWalk/.test(css) && /@keyframes chWave/.test(css));
+    ok('char: 작업중엔 통통 튀는 작업 애니', /\.actor\.working \.ch \.ch-bob\s*\{[^}]*chWorkBob/s.test(css));
+    ok('char: 걷는 동안 1.4초 이동 transition', /\.actor\.walking\s*\{[^}]*transition:left 1\.4s[^}]*top 1\.4s/s.test(css));
+    ok('char: prefers-reduced-motion이면 캐릭터 애니메이션 끔',
+      /prefers-reduced-motion:reduce\)\{[\s\S]*?\.actor \.ch[^}]*animation:none!important/.test(css));
+    dom.window.close();
+  }
+
+  /* ============ 10) 라운지 어슬렁 — 대기중 캐릭터가 스스로 걷기 ============ */
+  {
+    const { dom, w, d } = boot();
+    await wait(180);
+    d.querySelector('[data-me="jingyu"]').click();
+    await wait(80);
+
+    const roam = w.eval("Object.keys(S.roam)");
+    ok('roam: 대기중 캐릭터마다 자리·시각이 잡힘', Array.isArray(roam) && roam.length >= 3, JSON.stringify(roam));
+    const nexts = w.eval("Object.values(S.roam).map(r=>Math.round(r.nextAt))").map(Number);
+    ok('roam: 캐릭터마다 시작 시각이 어긋남(동시 출발 아님)', new Set(nexts).size >= 2, JSON.stringify(nexts));
+
+    const before = w.eval("({x:S.roam.roen.x, y:S.roam.roen.y})");
+    w.eval("S.roam.roen.nextAt = 0; roamStep();");
+    await wait(90);
+    const roen = d.querySelector('.actor[data-agent="roen"]');
+    const after = w.eval("({x:S.roam.roen.x, y:S.roam.roen.y, walk:S.roam.roen.walkingUntil})");
+    ok('roam: 때가 되면 라운지의 새 자리로 출발', (after.x !== before.x || after.y !== before.y), JSON.stringify(after));
+    ok('roam: 걷는 동안 walking 클래스', roen.classList.contains('walking') && roen.dataset.state === 'walking', roen.className);
+    ok('roam: 새 자리는 라운지 범위 안(51~92% / 54~86%)',
+      after.x >= 51 && after.x <= 92 && after.y >= 54 && after.y <= 86, after.x + ',' + after.y);
+    ok('roam: 다음 출발은 5~7초 뒤', w.eval("S.roam.roen.nextAt - Date.now()") > 4000
+      && w.eval("S.roam.roen.nextAt - Date.now()") < 8000);
+
+    w.eval("S.agents.roen.status='작업중'; S.agents.roen.zone='work'; roamStep(); render();");
+    await wait(90);
+    ok('roam: 작업중이 되면 순찰을 멈추고 로밍 상태 해제', w.eval("!S.roam.roen"));
+    ok('roam: 작업중이면 책상 자리(working)', d.querySelector('.actor[data-agent="roen"]').classList.contains('working'));
+
+    const css = (HTML.match(/<style>([\s\S]*?)<\/style>/) || ['', ''])[1];
+    ok('roam: reduced-motion이면 자율 이동 코드 자체를 켜지 않음', /REDUCED_MOTION/.test(HTML)
+      && /if\(!REDUCED_MOTION\) setInterval\(roamStep/.test(HTML));
+    ok('roam: 걷는 동안 좌우 방향 전환(face-left)', /\.ch\.face-left \.ch-flip\s*\{[^}]*scaleX\(-1\)/s.test(css));
+    dom.window.close();
+  }
+
+  /* ============ 11) 봇 이름 변경 — 지도·상태판·무전기·멘션 반영 ============ */
+  {
+    const { dom, w, d, published, geminiCalls } = boot();
+    await wait(180);
+    d.querySelector('[data-me="jingyu"]').click();
+    await wait(80);
+
+    d.querySelector('.tab[data-tab="chat"]').click();
+    await wait(60);
+    const chips0 = [...d.querySelectorAll('[data-mention]')].map(b => b.dataset.mention);
+    ok('rename: 칩은 기본 이름', chips0.includes('제미나이'), chips0.join(','));
+
+    d.querySelector('.tab[data-tab="crew"]').click();
+    await wait(80);
+    const btns = [...d.querySelectorAll('[data-rename="gemini"]')];
+    ok('rename: 인력 카드에 ✏️ 이름 변경 버튼', btns.length === 2
+      && btns.some(b => b.textContent.includes('이름 변경')), String(btns.length));
+    btns.find(b => b.textContent.includes('이름 변경')).click();
+    await wait(60);
+    ok('rename: 이름·직책 입력 시트', !!d.querySelector('#rnName') && !!d.querySelector('#rnRole'));
+    ok('rename: 지금 이름이 채워짐', d.querySelector('#rnName').value === '제미나이', d.querySelector('#rnName').value);
+    d.querySelector('#rnName').value = '비서왕';
+    d.querySelector('#rnRole').value = '총괄 비서';
+    d.querySelector('#rnSave').click();
+    await wait(140);
+    ok('rename: 카드에 새 이름·직책', d.querySelector('#view-crew').textContent.includes('비서왕')
+      && d.querySelector('#view-crew').textContent.includes('총괄 비서'));
+    const rec = published.filter(p => p.t === 'agent' && p.d.id === 'gemini').pop();
+    ok('rename: agents/gemini 에 이름 저장(새 이름 + customName + 편집 시각)',
+      !!rec && rec.d.name === '비서왕' && rec.d.role === '총괄 비서' && rec.d.customName === true && rec.d.nameEditedAt > 0,
+      JSON.stringify(rec && rec.d));
+
+    d.querySelector('.tab[data-tab="map"]').click();
+    await wait(120);
+    ok('rename: 지도 이름표가 새 이름', d.querySelector('.actor[data-agent="gemini"] .nm').textContent === '비서왕',
+      d.querySelector('.actor[data-agent="gemini"] .nm').textContent);
+    ok('rename: 지금 오피스 목록도 새 이름', d.querySelector('.nowrow[data-watch="gemini"]').textContent.includes('비서왕'));
+    ok('rename: 캐릭터를 눌러도 이름 변경 버튼', (() => {
+      d.querySelector('.actor[data-agent="gemini"]').click();
+      return !!d.querySelector('#actorRename');
+    })());
+
+    d.querySelector('.tab[data-tab="chat"]').click();
+    await wait(80);
+    const chips = [...d.querySelectorAll('[data-mention]')].map(b => b.dataset.mention);
+    ok('rename: 멘션 칩도 새 이름', chips.includes('비서왕') && !chips.includes('제미나이'), chips.join(','));
+
+    w.localStorage.setItem('nogada_gemini_api_key', FAKE_KEY);
+    d.querySelector('#msgInput').value = '@비서왕 오늘 날씨 알려줘';
+    d.querySelector('#sendBtn').click();
+    await wait(800);
+    ok('rename: @새이름 으로 제미나이 호출', geminiCalls.length === 1, 'calls=' + geminiCalls.length);
+    const reply = published.filter(p => p.t === 'msg' && p.d.from === 'gemini').pop();
+    ok('rename: 답장 발신자 이름도 새 이름', !!reply && reply.d.name === '비서왕', reply && reply.d.name);
+    ok('rename: 예전 이름(제미나이)도 그대로 호출', (() => {
+      d.querySelector('#msgInput').value = '@제미나이 한 번 더 확인해줘';
+      d.querySelector('#sendBtn').click();
+      return true;
+    })());
+    await wait(900);
+    ok('rename: @제미나이(예전 이름)로도 호출됨', geminiCalls.length === 2, 'calls=' + geminiCalls.length);
+    ok('rename: @gemini(영문)도 호출됨', (() => {
+      d.querySelector('#msgInput').value = '@gemini 마지막으로 하나만';
+      d.querySelector('#sendBtn').click();
+      return true;
+    })());
+    await wait(900);
+    ok('rename: @gemini 영문 별칭도 동작', geminiCalls.length === 3, 'calls=' + geminiCalls.length);
+
+    d.querySelector('.tab[data-tab="crew"]').click();
+    await wait(80);
+    d.querySelector('[data-rename="gemini"]').click();
+    await wait(60);
+    ok('rename: 기본값 복원 버튼', !!d.querySelector('#rnReset') && d.querySelector('#rnReset').textContent.includes('제미나이'));
+    d.querySelector('#rnReset').click();
+    await wait(120);
+    ok('rename: 기본값 복원하면 원래 이름', d.querySelector('#view-crew').textContent.includes('제미나이')
+      && !d.querySelector('#view-crew').textContent.includes('비서왕'));
+    const back = w.eval("S.agents.gemini");
+    ok('rename: 복원도 저장 대상(customName=false + 편집 시각)', back.customName === false && back.nameEditedAt > 0);
+    dom.window.close();
+  }
+
+  /* ============ 12) 새로 열어도 이름 유지 — 씨앗/낡은 상태가 덮지 않음 ============ */
+  {
+    const storedAgent = {
+      id: 'gemini', name: '비서왕', role: '총괄 비서', emoji: '🤖', status: '대기중', zone: 'work',
+      origName: '제미나이', origRole: '설계/기술 자문', customName: true, customRole: true,
+      nameEditedAt: 9999999999000, roleEditedAt: 9999999999000, updatedAt: 9999999999000
+    };
+    const { dom, w, d, published } = boot({
+      storage: {
+        'nogada.state': { agents: { gemini: storedAgent }, tasks: {}, at: 9999999999000 },
+        'nogada.me': { id: 'jingyu', name: '사장님', emoji: '🧑‍✈️', role: '현장 발주처' }
+      }
+    });
+    await wait(220);
+    ok('reload: 저장된 새 이름이 그대로 보임', d.querySelector('.actor[data-agent="gemini"] .nm').textContent === '비서왕',
+      d.querySelector('.actor[data-agent="gemini"] .nm').textContent);
+    ok('reload: 씨앗 인력이 새 이름을 되돌려 쓰지 않음',
+      !published.some(p => p.t === 'agent' && p.d.id === 'gemini' && p.d.name === '제미나이'));
+    w.eval("CORE_AGENTS.forEach(id => delete S.agents[id]); ensureCoreAgents();");
+    await wait(80);
+    ok('reload: CORE_AGENTS 재투입이 새 이름을 덮지 않음',
+      w.eval("S.agents.gemini.name") === '비서왕', w.eval("S.agents.gemini.name"));
+
+    w.eval("applyRemoteAgent('gemini', {id:'gemini', name:'제미나이', role:'설계/기술 자문', emoji:'🤖', status:'작업중', zone:'work', updatedAt: Date.now()+5000}); render();");
+    await wait(80);
+    ok('reload: 다른 기기의 낡은 기록(기본 이름)이 새 이름을 덮지 않음',
+      w.eval("S.agents.gemini.name") === '비서왕', w.eval("S.agents.gemini.name"));
+    ok('reload: 낡은 기록의 상태·구역은 반영', w.eval("S.agents.gemini.status") === '작업중');
+
+    w.eval("applyRemoteAgent('groq', {id:'groq', name:'번개', role:'초고속 AI 비서', emoji:'⚡', status:'대기중', zone:'office', nameEditedAt: Date.now()+9000, updatedAt: Date.now()+9000}); render();");
+    await wait(80);
+    ok('reload: 다른 기기에서 바꾼 새 이름은 받아들임', w.eval("S.agents.groq.name") === '번개');
     dom.window.close();
   }
 

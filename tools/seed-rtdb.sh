@@ -21,8 +21,23 @@ def put(path, payload):
         body = r.read().decode()
         print(f"  PUT {path}.json -> {r.status} {body[:60]}")
 
+def get(path):
+    url = f"{db}{path}.json"
+    try:
+        with urllib.request.urlopen(url, timeout=20) as r:
+            return json.loads(r.read().decode() or 'null')
+    except Exception:
+        return None
+
 print("== agents ==")
+# 이미 있는 인력은 손대지 않습니다 — 화면에서 바꾼 이름(예: 로엔 → 비서왕)을
+# 시드가 기본 이름으로 덮어쓰지 않게 하기 위해서입니다. (없는 인력만 새로 넣습니다)
 for k, v in seed['rooms']['nogada01']['agents'].items():
+    cur = get(f"/rooms/nogada01/agents/{k}")
+    if isinstance(cur, dict) and cur.get('name'):
+        extra = ' (이름 유지: ' + str(cur.get('name')) + ')' if cur.get('name') != v.get('name') else ''
+        print(f"  SKIP /rooms/nogada01/agents/{k} — 이미 있음{extra}")
+        continue
     put(f"/rooms/nogada01/agents/{k}", v)
     v['updatedAt'] = 1764229000000  # fixed seed timestamp
 print("== messages ==")
