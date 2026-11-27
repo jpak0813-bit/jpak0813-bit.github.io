@@ -83,6 +83,20 @@ curl -X PUT "https://<프로젝트ID>-default-rtdb.firebaseio.com/rooms/nogada01
 
 `?room=우리집` 처럼 방 이름을 바꾸면 별도의 현장이 됩니다. (같은 방 이름을 쓰는 사람끼리만 연결)
 
+## Firebase 준비 후 시드 주입
+
+Realtime Database를 **테스트 모드**로 만든 뒤, 받은 DB URL로 아래를 실행하면 `rooms/nogada01`에 로엔·박빈나·환영 무전·샘플 작업이 들어갑니다.
+
+```bash
+bash tools/seed-rtdb.sh https://<프로젝트ID>-default-rtdb.firebaseio.com
+```
+
+앱 연결은 URL 파라미터 한 번이면 됩니다.
+
+```
+https://jpak0813-bit.github.io/?db=https://<프로젝트ID>-default-rtdb.firebaseio.com
+```
+
 ## 파일
 
 ```
@@ -90,6 +104,9 @@ index.html            앱 전체 (이미지까지 한 파일에 들어 있음)
 app.template.html     편집용 원본 (이미지는 IMG_SRC_PLACEHOLDER 자리)
 assets/nogada-site.png / .webp / .jpg   현장 일러스트 원본
 firebase-rules.json   RTDB 보안 규칙
+seed/rtdb-nogada01.json  초기 데이터(에이전트·환영 무전·샘플 작업)
+tools/seed-rtdb.sh    시드 주입 스크립트
+deploy.sh             GitHub Pages 배포 스크립트
 ```
 
 `index.html`을 고칠 때는 `app.template.html`을 고친 뒤 아래처럼 다시 만듭니다.
