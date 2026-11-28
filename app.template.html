@@ -287,7 +287,7 @@ body.fs-lock{overflow:hidden}
 .chat-input{position:sticky;bottom:0;background:linear-gradient(180deg,transparent,var(--ink) 30%);padding-top:8px}
 .chat-row{display:flex;gap:6px;align-items:flex-end;background:var(--panel2);border:1px solid var(--yellow-dim);border-radius:14px;padding:6px}
 .chat-row textarea{flex:1;background:transparent;border:none;color:var(--text);font-family:inherit;font-size:16px;
-  resize:none;outline:none;padding:9px 6px;min-height:42px;max-height:170px;line-height:1.5}
+  resize:none;outline:none;padding:9px 6px;min-height:42px;max-height:170px;line-height:1.5;overflow-y:hidden}
 .chat-row textarea::placeholder{color:var(--muted2)}
 .nlbtn{width:34px;height:42px;border-radius:10px;border:1px solid var(--yellow-dim);background:var(--panel3);
   color:var(--muted);font-size:15px;cursor:pointer;flex:0 0 auto;font-family:inherit}
@@ -1721,7 +1721,7 @@ function renderChat(){
     +     '<button class="chip" data-quick="안전 점검 한 번 돌아줘.">⛑️ 안전 점검</button>'
     +   '</div>'
     +   '<div class="chat-row">'
-    +     '<textarea id="msgInput" rows="1" placeholder="무전 내용을 입력하세요 (@로엔 으로 호출)" enterkeyhint="send"></textarea>'
+    +     '<textarea id="msgInput" rows="1" placeholder="무전 내용 입력 (@로엔 호출)" enterkeyhint="send"></textarea>'
     +     '<button class="nlbtn" id="nlBtn" type="button" title="줄바꿈 (Shift+Enter)" aria-label="줄바꿈">↵</button>'
     +     '<button class="send" id="sendBtn">➤</button>'
     +   '</div>'
