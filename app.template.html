@@ -1052,7 +1052,9 @@ function prettyText(text){
 }
 /* 말풍선 HTML — 멘션·굵게 표시를 살리고, 빈 줄로 나뉜 문단은 .para 로 감쌉니다. */
 function messageHtml(text){
-  const html = mentionize(prettyText(text)).replace(/\*\*([^*<>]{1,120})\*\*/g, '<b>$1</b>');
+  const html = mentionize(prettyText(text))
+    .replace(/\*\*([^*<>]{1,120})\*\*/g, '<b>$1</b>')
+    .replace(/\*\*/g, '');          /* 짝이 안 맞는 굵게 기호는 글자로 보이지 않게 */
   const blocks = html.split(/\n{2,}/).map(b => b.replace(/^\n+|\n+$/g, '')).filter(Boolean);
   if(blocks.length < 2) return html;
   return blocks.map(b => '<div class="para">' + b + '</div>').join('');
@@ -1800,6 +1802,16 @@ function scrollChatBottom(){
 const NOTIFY_KEY = 'notify';
 const BASE_TITLE = '노가다 현장 합동 비서실';
 let audioCtx = null;
+let swReg = null;          /* 알림 팝업을 띄우는 서비스 워커(안드로이드·iOS 대응) */
+
+/* 안드로이드 크롬은 페이지의 new Notification() 을 막아 두었습니다.
+   서비스 워커를 등록해 두고 그 showNotification() 으로 팝업을 띄웁니다. */
+function ensureServiceWorker(){
+  if(swReg) return Promise.resolve(swReg);
+  const nav = (typeof navigator !== 'undefined') ? navigator : null;
+  if(!nav || !nav.serviceWorker || typeof nav.serviceWorker.register !== 'function') return Promise.resolve(null);
+  return nav.serviceWorker.register('sw.js').then(reg => { swReg = reg; return reg; }).catch(() => null);
+}
 
 function notifySupported(){
   return typeof window !== 'undefined' && typeof window.Notification !== 'undefined';
@@ -1831,6 +1843,7 @@ async function toggleNotify(){
     return;
   }
   primeAudio();                       /* 클릭(사용자 제스처) 안에서 오디오를 깨워 둔다 */
+  ensureServiceWorker();              /* 팝업용 서비스 워커도 미리 등록 */
   if(!notifySupported()){
     notifyOn = true; LS.set(NOTIFY_KEY, true); syncNotifyButtons();
     toast('🔔 알림음과 탭 제목으로 알려드립니다 (이 브라우저는 팝업 미지원)');
@@ -1880,10 +1893,22 @@ function notifyNewRadio(m){
   if(!document.hidden && S.tab === 'chat') return;
   document.title = '🔴 새 무전!';
   if(notifySupported() && notifyPermission() === 'granted'){
-    try{
-      const n = new Notification('📻 ' + who, { body, tag: 'nogada-' + (m.id || now()) });
-      n.onclick = () => { try{ window.focus(); }catch(e){} try{ n.close(); }catch(e){} document.title = BASE_TITLE; };
-    }catch(e){}
+    const title = '📻 ' + who;
+    const opts = { body, tag: 'nogada-' + (m.id || now()), data: { url: location.href } };
+    /* ① 서비스 워커 알림(안드로이드·iOS에서도 뜨는 방식) → ② 안 되면 페이지 알림 */
+    const viaPage = () => {
+      try{
+        const n = new Notification(title, opts);
+        n.onclick = () => { try{ window.focus(); }catch(e){} try{ n.close(); }catch(e){} document.title = BASE_TITLE; };
+      }catch(e){}
+    };
+    ensureServiceWorker().then(reg => {
+      if(reg && typeof reg.showNotification === 'function'){
+        try{ Promise.resolve(reg.showNotification(title, opts)).catch(viaPage); return; }
+        catch(e){}
+      }
+      viaPage();
+    });
   }
 }
 function restoreTitle(){ if(document.title !== BASE_TITLE) document.title = BASE_TITLE; }
@@ -3073,6 +3098,7 @@ function afterAuth(){
   S.lastSeen = LS.get('lastSeen', 0);
   S._bootAt = now();
   loadNotifyPref();
+  if(notifyOn) ensureServiceWorker();
 
   /* 씨앗 데이터 — 시각을 아주 오래전(1)으로 두어, 서버에 저장된 이름·상태가 항상 이긴다. */
   if(Object.keys(S.agents).length === 0){

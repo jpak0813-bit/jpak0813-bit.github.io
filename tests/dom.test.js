@@ -99,6 +99,9 @@ function boot(opts = {}) {
       }
       window.requestAnimationFrame = cb => setTimeout(() => cb(0), 0);
       window.scrollTo = () => {};
+      if (opts.serviceWorker) {
+        Object.defineProperty(window.navigator, 'serviceWorker', { configurable: true, value: opts.serviceWorker });
+      }
       Object.defineProperty(window.navigator, 'clipboard', {
         configurable: true,
         value: { writeText: async t => { copied.push(t); } }
@@ -1626,6 +1629,49 @@ function fakeFirebase() {
     second.w.Notification = FakeNotification;
     await wait(200);
     ok('notify: 새로 열어도 켜짐 상태 유지', second.w.eval('notifyOn') === true && second.d.querySelector('#notifyBtn').textContent.includes('🔔'));
+    second.dom.window.close();
+  }
+
+  /* ============ 15) 안드로이드 크롬 대응 — 서비스 워커 알림 ============ */
+  {
+    const swShown = [];
+    let registeredUrl = '';
+    const sw = {
+      register: async (url) => {
+        registeredUrl = url;
+        return { showNotification: (title, opts) => { swShown.push({ title, opts }); return Promise.resolve(); } };
+      }
+    };
+    /* 안드로이드 크롬처럼 페이지의 new Notification() 은 막혀 있는 상황 */
+    function BlockedNotification(){ throw new Error('Illegal constructor'); }
+    BlockedNotification.permission = 'granted';
+    BlockedNotification.requestPermission = async () => 'granted';
+
+    const { dom, w, d } = boot({
+      serviceWorker: sw,
+      storage: { 'nogada.notify': true, 'nogada.me': { id: 'jingyu', name: '사장님', emoji: '🧑‍✈️' } }
+    });
+    w.Notification = BlockedNotification;
+    await wait(240);
+    ok('notify(SW): 켜 둔 상태로 열면 서비스 워커 등록', registeredUrl === 'sw.js', registeredUrl || 'none');
+    w.eval("applyRemoteMsg({id:'m-sw1', from:'roen', name:'로엔', emoji:'🦺', text:'서비스 워커 알림 테스트', ts: Date.now()});");
+    await wait(120);
+    ok('notify(SW): 생성자가 막혀도 showNotification으로 팝업', swShown.length === 1, 'sw=' + swShown.length);
+    ok('notify(SW): 팝업 제목·본문', !!swShown[0] && /로엔/.test(swShown[0].title) && /서비스 워커 알림 테스트/.test(swShown[0].opts.body));
+    ok('notify(SW): 탭 제목 표시', d.title.includes('🔴 새 무전'), d.title);
+    dom.window.close();
+
+    /* 짝이 안 맞는 ** 기호도 글자로 남지 않음 */
+    const second = boot();
+    await wait(160);
+    second.d.querySelector('[data-me="jingyu"]').click();
+    await wait(40);
+    second.d.querySelector('.tab[data-tab="chat"]').click();
+    await wait(60);
+    second.w.eval("applyRemoteMsg({id:'m-star', from:" + JSON.stringify('roen') + ", name:'로엔', emoji:'🦺', text:'6. 주요 투자 포인트 - **핵', ts: Date.now()}); render();");
+    await wait(80);
+    const star = [...second.d.querySelectorAll('#view-chat .bubble')].pop();
+    ok('chat: 짝 없는 ** 기호는 보이지 않음', !!star && !star.textContent.includes('**'), star && star.textContent);
     second.dom.window.close();
   }
 
