@@ -1470,6 +1470,165 @@ function fakeFirebase() {
     dom.window.close();
   }
 
+  /* ============ 13) 무전기 가독성·크게 보기·새 무전 알림 ============ */
+  {
+    const css = (HTML.match(/<style>([\s\S]*?)<\/style>/) || ['', ''])[1];
+    ok('chat css: 말풍선 줄바꿈 보존(pre-wrap)', /\.bubble\s*\{[^}]*white-space:pre-wrap/s.test(css));
+    ok('chat css: 말풍선 글자 15px·줄간 1.65·어절 넘침 방지',
+      /\.bubble\s*\{[^}]*font-size:15px/s.test(css) && /\.bubble\s*\{[^}]*line-height:1\.65/s.test(css)
+      && /\.bubble\s*\{[^}]*overflow-wrap:anywhere/s.test(css));
+    ok('chat css: 문단 사이 여백(.para + .para)', /\.bubble \.para \+ \.para\s*\{[^}]*margin-top/s.test(css));
+    ok('chat css: 메시지 영역 기본 높이가 화면 기준으로 큼', /\.chat-scroll\s*\{[^}]*min-height:calc\(100dvh/s.test(css));
+    ok('chat css: 크게 보기는 화면 전체(fixed)', /\.chatcard\.fs\s*\{[^}]*position:fixed[^}]*inset:0/s.test(css));
+    ok('chat css: 크게 보기 중 본문 스크롤 잠금', /body\.fs-lock\s*\{[^}]*overflow:hidden/s.test(css));
+
+    const { dom, w, d, published } = boot();
+    await wait(160);
+    d.querySelector('[data-me="jingyu"]').click();
+    await wait(40);
+    d.querySelector('.tab[data-tab="chat"]').click();
+    await wait(60);
+
+    /* 줄바꿈·문단 보존 */
+    w.eval("applyRemoteMsg({id:'m-para', from:'roen', name:'로엔', emoji:'🦺', text:'첫 문단입니다.\\n\\n둘째 문단입니다.', ts: Date.now()}); render();");
+    await wait(80);
+    let bubble = [...d.querySelectorAll('#view-chat .bubble')].pop();
+    ok('chat: 빈 줄 문단이 .para 두 덩이로 나뉨', bubble.querySelectorAll('.para').length === 2, String(bubble.querySelectorAll('.para').length));
+    ok('chat: 문단 글자가 그대로 보존', bubble.textContent.includes('첫 문단입니다.') && bubble.textContent.includes('둘째 문단입니다.'));
+
+    /* 한 줄로 붙어 온 긴 AI 답 → 번호·불릿 앞에서 끊김 */
+    const oneLine = '오늘 코스피는 상승 마감했다. 1. 지수 변동과 주요 원인 - 반도체가 올랐다. - 외국인이 순매수했다. 2. 섹터별 흐름 - 바이오가 강했다.';
+    w.eval("applyRemoteMsg({id:'m-oneline', from:'groq', name:'그록', emoji:'⚡', ai:true, text:" + JSON.stringify(oneLine) + ", ts: Date.now()}); render();");
+    await wait(80);
+    bubble = [...d.querySelectorAll('#view-chat .bubble')].pop();
+    ok('chat: 한 줄 답도 줄바꿈이 생김', bubble.textContent.includes('\n'), JSON.stringify(bubble.textContent.slice(0, 60)));
+    ok('chat: 번호 항목이 문단으로 나뉨', bubble.querySelectorAll('.para').length >= 3, String(bubble.querySelectorAll('.para').length));
+    ok('chat: 불릿(- ) 앞에서 줄이 바뀜', /\n-\s/.test(bubble.textContent.replace(/^\s+/gm, '')) || bubble.textContent.split('\n').some(l => l.trim().startsWith('- ')));
+
+    /* 마크다운 굵게는 글자로 보이지 않게 */
+    w.eval("applyRemoteMsg({id:'m-bold', from:'roen', name:'로엔', emoji:'🦺', text:'**중요** 자재 확인', ts: Date.now()}); render();");
+    await wait(80);
+    bubble = [...d.querySelectorAll('#view-chat .bubble')].pop();
+    ok('chat: **굵게**는 <b>로 렌더', !!bubble.querySelector('b') && !bubble.textContent.includes('**'), bubble.innerHTML.slice(0, 80));
+
+    /* 멘션 표시는 그대로 */
+    w.eval("applyRemoteMsg({id:'m-mention', from:'roen', name:'로엔', emoji:'🦺', text:'@로엔 확인 부탁', ts: Date.now()}); render();");
+    await wait(80);
+    bubble = [...d.querySelectorAll('#view-chat .bubble')].pop();
+    ok('chat: @멘션 강조 유지', !!bubble.querySelector('.mention'));
+
+    /* ⛶ 크게 보기 토글 */
+    ok('chat: 헤더에 크게 보기 버튼', !!d.querySelector('#expandBtn') && d.querySelector('#expandBtn').textContent.includes('크게'));
+    d.querySelector('#expandBtn').click();
+    await wait(80);
+    ok('chat: 크게 보기 → 카드 fs + 본문 스크롤 잠금',
+      d.querySelector('.chatcard').classList.contains('fs') && d.body.classList.contains('fs-lock'));
+    ok('chat: 버튼이 축소로 바뀜', d.querySelector('#expandBtn').textContent.includes('축소'));
+    ok('chat: 크게 보기에서도 입력칸·말풍선 유지', !!d.querySelector('#msgInput') && !!d.querySelector('#view-chat .bubble'));
+    d.querySelector('#expandBtn').click();
+    await wait(80);
+    ok('chat: 축소 → fs 해제', !d.querySelector('.chatcard').classList.contains('fs') && !d.body.classList.contains('fs-lock'));
+
+    /* 쓰다 만 글은 새 무전이 와도 그대로 */
+    const inp = d.querySelector('#msgInput');
+    inp.value = '쓰고 있던 긴 무전';
+    inp.dispatchEvent(new w.Event('input', { bubbles: true }));
+    w.eval("applyRemoteMsg({id:'m-draft', from:'roen', name:'로엔', emoji:'🦺', text:'새 소식', ts: Date.now()}); render();");
+    await wait(90);
+    ok('chat: 새 무전이 와도 쓰던 글이 유지됨', d.querySelector('#msgInput').value === '쓰고 있던 긴 무전', d.querySelector('#msgInput').value);
+
+    /* Enter 전송 / Shift+Enter 줄바꿈 / ↵ 버튼 */
+    const before = published.filter(p => p.t === 'msg').length;
+    const inp2 = d.querySelector('#msgInput');
+    inp2.value = '첫줄';
+    inp2.dispatchEvent(new w.Event('input', { bubbles: true }));
+    inp2.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', shiftKey: true, bubbles: true }));
+    await wait(40);
+    ok('chat: Shift+Enter는 전송하지 않음', published.filter(p => p.t === 'msg').length === before && d.querySelector('#msgInput').value === '첫줄');
+    d.querySelector('#nlBtn').click();
+    await wait(40);
+    ok('chat: ↵ 버튼으로 줄바꿈 삽입', d.querySelector('#msgInput').value.includes('\n'));
+    d.querySelector('#msgInput').value = '전송 테스트';
+    d.querySelector('#msgInput').dispatchEvent(new w.Event('input', { bubbles: true }));
+    d.querySelector('#msgInput').dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await wait(80);
+    ok('chat: Enter는 전송', published.some(p => p.t === 'msg' && p.d.text === '전송 테스트'));
+    ok('chat: 전송하면 입력칸이 비워짐', d.querySelector('#msgInput').value === '');
+
+    /* 알림 토글 — Notification 없는 환경에서도 오류 없이 켜짐 */
+    ok('notify: 상단 바에 알림 버튼(기본 꺼짐)', !!d.querySelector('#notifyBtn') && d.querySelector('#notifyBtn').textContent.includes('🔕'));
+    d.querySelector('#notifyBtn').click();
+    await wait(80);
+    ok('notify: Notification 없는 환경에서도 켜짐(오류 없음)', d.querySelector('#notifyBtn').textContent.includes('🔔') && w.eval('notifyOn') === true);
+    ok('notify: 상태를 localStorage에 저장', w.localStorage.getItem('nogada.notify') === 'true', String(w.localStorage.getItem('nogada.notify')));
+    ok('notify: 무전기 헤더 알림칩도 켜짐 표시', d.querySelector('#notifyChip').textContent.includes('켬'));
+    d.querySelector('#notifyBtn').click();
+    await wait(60);
+    ok('notify: 다시 누르면 꺼짐', w.eval('notifyOn') === false && w.localStorage.getItem('nogada.notify') === 'false');
+    dom.window.close();
+  }
+
+  /* ============ 14) 새 무전 알림 팝업 + 탭 제목 ============ */
+  {
+    const shown = [];
+    function FakeNotification(title, opts){ shown.push({ title, opts }); this.close = () => {}; }
+    FakeNotification.permission = 'default';
+    FakeNotification.requestPermission = async () => { FakeNotification.permission = 'granted'; return 'granted'; };
+
+    const { boot: boot2 } = { boot };
+    const { dom, w, d } = boot2();
+    await wait(160);
+    d.querySelector('[data-me="jingyu"]').click();
+    await wait(40);
+    w.Notification = FakeNotification;
+    d.querySelector('#notifyBtn').click();
+    await wait(80);
+    ok('notify: 권한 요청 후 켜짐', FakeNotification.permission === 'granted' && w.eval('notifyOn') === true);
+
+    d.querySelector('.tab[data-tab="map"]').click();
+    await wait(60);
+    w.eval("applyRemoteMsg({id:'m-alert1', from:'roen', name:'로엔', emoji:'🦺', text:'사장님 자재 들어왔습니다. 확인 부탁드립니다.', ts: Date.now()});");
+    await wait(80);
+    ok('notify: 다른 발신자 무전 → 브라우저 팝업 1건', shown.length === 1, 'shown=' + shown.length);
+    ok('notify: 팝업 제목에 발신자 이름', !!shown[0] && /로엔/.test(shown[0].title), shown[0] && shown[0].title);
+    ok('notify: 팝업 본문에 무전 앞부분', !!shown[0] && /자재 들어왔습니다/.test(shown[0].opts.body), shown[0] && shown[0].opts.body);
+    ok('notify: 탭 제목 🔴 새 무전!', d.title.includes('🔴 새 무전'), d.title);
+    w.dispatchEvent(new w.Event('focus'));
+    await wait(40);
+    ok('notify: 창이 다시 보이면 제목 복원', d.title === '노가다 현장 합동 비서실', d.title);
+
+    /* 내가 쓴 글·시스템 안내는 알림 없음 */
+    w.eval("applyRemoteMsg({id:'m-mine', from:'jingyu', name:'사장님', emoji:'🧑‍✈️', text:'내가 보낸 무전', ts: Date.now()});");
+    await wait(60);
+    ok('notify: 내 글은 팝업 없음', shown.length === 1, 'shown=' + shown.length);
+    w.eval("applyRemoteMsg({id:'m-sys', from:'roen', name:'로엔', emoji:'🦺', sys:true, text:'시스템 안내', ts: Date.now()});");
+    await wait(60);
+    ok('notify: 시스템 안내는 팝업 없음', shown.length === 1, 'shown=' + shown.length);
+
+    /* 무전기를 보고 있을 때는 팝업으로 방해하지 않음 */
+    d.querySelector('.tab[data-tab="chat"]').click();
+    await wait(60);
+    w.eval("applyRemoteMsg({id:'m-alert2', from:'roen', name:'로엔', emoji:'🦺', text:'보고 있을 때 온 무전', ts: Date.now()});");
+    await wait(60);
+    ok('notify: 무전기를 보는 중엔 팝업 생략', shown.length === 1, 'shown=' + shown.length);
+
+    d.querySelector('#notifyBtn').click();
+    await wait(60);
+    d.querySelector('.tab[data-tab="map"]').click();
+    await wait(50);
+    w.eval("applyRemoteMsg({id:'m-alert3', from:'binna', name:'박빈나 피클', emoji:'🧡', text:'께졌을 때 온 무전', ts: Date.now()});");
+    await wait(60);
+    ok('notify: 꺼 둔 뒤에는 팝업 없음', shown.length === 1, 'shown=' + shown.length);
+
+    /* 저장된 설정으로 새로 열면 자동으로 켜짐 */
+    dom.window.close();
+    const second = boot({ storage: { 'nogada.notify': true, 'nogada.me': { id: 'jingyu', name: '사장님', emoji: '🧑‍✈️' } } });
+    second.w.Notification = FakeNotification;
+    await wait(200);
+    ok('notify: 새로 열어도 켜짐 상태 유지', second.w.eval('notifyOn') === true && second.d.querySelector('#notifyBtn').textContent.includes('🔔'));
+    second.dom.window.close();
+  }
+
   console.log(results.join('\n'));
   const failed = results.filter(r => r.startsWith('FAIL')).length;
   console.log('\nSUMMARY: ' + (results.length - failed) + ' passed / ' + failed + ' failed');
