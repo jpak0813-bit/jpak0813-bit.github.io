@@ -3022,6 +3022,10 @@ function switchTab(t){
 document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', ()=> switchTab(b.dataset.tab)));
 $('#meBtn').addEventListener('click', ()=> openIdentity(false));
 $('#notifyBtn').addEventListener('click', ()=> toggleNotify());
+/* 크게 보기에서 Esc 를 누르면 원래 화면으로 (시트가 열려 있을 때는 시트가 우선) */
+document.addEventListener('keydown', e => {
+  if(e.key === 'Escape' && chatFs && !$('#overlay').classList.contains('on')) setChatFs(false);
+});
 /* 지도 위 캐릭터를 누르면 — 상태 토스트 + 잠깐 강조 + 캐릭터 카드(이름 변경 버튼) */
 function tapActor(id, el){
   const a = S.agents[id];

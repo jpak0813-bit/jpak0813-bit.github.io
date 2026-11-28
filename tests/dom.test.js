@@ -1531,6 +1531,11 @@ function fakeFirebase() {
     d.querySelector('#expandBtn').click();
     await wait(80);
     ok('chat: 축소 → fs 해제', !d.querySelector('.chatcard').classList.contains('fs') && !d.body.classList.contains('fs-lock'));
+    d.querySelector('#expandBtn').click();
+    await wait(80);
+    d.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await wait(80);
+    ok('chat: 크게 보기에서 Esc로 닫힘', !d.querySelector('.chatcard').classList.contains('fs'));
 
     /* 쓰다 만 글은 새 무전이 와도 그대로 */
     const inp = d.querySelector('#msgInput');
